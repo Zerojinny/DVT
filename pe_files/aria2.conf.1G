@@ -1,0 +1,12 @@
+file-allocation=falloc
+seed-time=60
+enable-dht=false
+enable-peer-exchange=false
+bt-enable-lpd=false
+max-overall-download-limit=0
+bt-request-peer-speed-limit=10M
+bt-max-peers=100
+disk-cache=128M
+max-upload-limit=0
+bt-tracker-interval=30
+on-bt-download-complete=start_restore.bat
