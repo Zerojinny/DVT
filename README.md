@@ -1,343 +1,781 @@
-# Deploy via torrent (DVT)
+# DVT — Deploy Via Torrent
 
-DVT는 토렌트 네트워크를 이용해 Windows 이미지(WIM)를 다수의 클라이언트에
-배포하고 복원하는 도구입니다. [확인: 대상 환경 예) 동일 LAN의 교육장·사내 PC]
+**English** | [한국어](README.ko.md)
 
-> ⚠️ **경고: 이 도구는 디스크를 초기화합니다.**
-> - 대상 디스크의 **모든 파티션과 데이터가 삭제**됩니다. (디스크 전체를 `clean` 한 뒤
->   GPT로 다시 구성하므로, 같은 디스크의 D: 등 다른 파티션도 모두 사라집니다.)
-> - 초기화는 이미지 다운로드 **전에** 수행됩니다. 다운로드나 복원 도중
->   실패하거나 전원이 차단되면 클라이언트는 **부팅 불가 상태**가 되며,
->   복구 도구(별도 제공 예정) 또는 외부 부팅 매체가 필요합니다.
-> - `makeboot.bat`는 마지막에 **키 입력 후 10초 뒤 PC를 강제 재부팅**(`shutdown /r /f`)합니다.
->   실행 전에 열려 있는 작업을 모두 저장하십시오.
-> - 재부팅 전에 반드시 백업하고, 시더가 정상 동작하는지 확인하십시오.
+DVT restores a Windows image to many PCs at once over the local network.
+Each PC boots a small WinPE image, downloads the backup image with BitTorrent
+(aria2), and applies it with wimlib — so every PC that has finished downloading
+also uploads to the others, and adding more PCs does not slow the deployment down
+the way a single file server would.
 
-## 1. 구성 및 라이선스
+A client PC can start DVT in two ways:
 
-DVT 본체는 The 3-Clause BSD License를 따릅니다. (`\license\license.txt`)
+- **Client local boot** — `host\make_boot.bat` runs in the client's Windows, prepares
+  the WinPE image for that PC and restarts into it. No input is needed at the PC.
+- **USB / CD media** — `make_media.bat` makes a boot USB drive or ISO. Use it
+  for PCs that cannot start Windows, or when nothing should run in the client's
+  Windows first. The operator enters the IP address and the disk at each PC.
 
-외부 프로그램은 각각 별도 라이선스이며 `license` 폴더의 파일을 참고하십시오.
+Everything is plain Windows batch. The scripts that run inside WinPE use only
+tools that WinPE ships with (no WMIC, WMI, PowerShell or findstr), plus aria2c,
+wimlib-imagex and NirCmd.
 
-- aria2c — https://aria2.github.io/
-- NirCmd — https://www.nirsoft.net/utils/nircmd.html
-- wimlib — https://wimlib.net/
-- qBittorrent — https://www.qbittorrent.org/
+> [!WARNING]
+> DVT **erases a whole disk** on every client PC it runs on. Read
+> [Choosing the disk to erase](#choosing-the-disk-to-erase) and test on a spare
+> PC before using it in a lab or office.
 
-각 스크립트의 역할은 [부록 A](#부록-a-파일-구성과-스크립트-역할)를 참고하십시오.
+---
 
-## 2. 요구사항
+## Contents
 
-**작성용 PC (WinPE 생성)**
+- [How it works](#how-it-works)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Repository layout](#repository-layout)
+- [Quick start — client local boot](#quick-start--client-local-boot)
+- [Quick start — USB / CD media](#quick-start--usb--cd-media)
+- [Test image](#test-image)
+- [Preparing the torrent](#preparing-the-torrent)
+- [Choosing the disk to erase](#choosing-the-disk-to-erase)
+- [Network](#network)
+- [USB / CD media details](#usb--cd-media-details)
+- [Configuration](#configuration)
+- [Script reference](#script-reference)
+- [Troubleshooting](#troubleshooting)
+- [Limitations](#limitations)
+- [Third-party tools](#third-party-tools)
+- [License](#license)
 
-- Windows ADK 에 대한 Windows PE 추가 기능
-  (기본 설치 경로 `C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Windows Preinstallation Environment\amd64`
-  를 사용하며, 경로가 다르면 `makePE.bat`의 `srdir`를 수정해야 합니다.)
-- Windows가 `C:`에 설치되어 있어야 합니다. (`dism.exe` 경로가 `C:\Windows\System32\dism.exe`로 고정)
-- 관리자 권한, 그리고 `%SystemDrive%\WinPE_LocalBuild`에 쓸 수 있는 충분한 로컬 여유 공간
-- WinPE는 **en-us** `winpe.wim`을 기반으로 만들어집니다.
+---
 
-**클라이언트**
+## How it works
 
-- Windows 10 이상 64비트 (PowerShell `Get-NetAdapter`, `pnputil /export-driver`, DISM 사용)
-- **UEFI 부팅 전용**: 대상 디스크를 GPT로 변환하고 EFI 시스템 파티션(256MB)을 만듭니다.
-  레거시 BIOS(MBR) 환경은 지원하지 않습니다.
-- **유선 LAN** 환경을 전제로 합니다. (기본 WinPE는 Wi-Fi를 지원하지 않음)
-- 관리자 권한으로 `makeboot.bat` 실행 가능해야 함
-- RAM / 디스크 여유 공간: [확인: 최소 RAM, `C:\temp\boot` 및 이미지 크기에 따른 여유 공간]
-- BitLocker 사용 PC: [확인: BCD 변경 시 복구 키 요구 여부 — 사전에 해제 권장]
-- 클라이언트의 DISM이 WinPE(ADK) 이미지 버전보다 낮으면 마운트·드라이버 추가가 실패할 수 있습니다.
-  [확인]
-
-**네트워크**
-
-- 클라이언트의 **기본 게이트웨이가 ping에 응답**해야 합니다. (미응답 시 중단)
-- 클라이언트에서 시더(및 트래커)에 접근 가능해야 합니다.
-- **DHT·PEX·LPD가 모두 비활성화**되어 있으므로, 토렌트에 클라이언트가 접근 가능한
-  **트래커 주소(announce)가 반드시 포함**되어야 합니다.
-
-
-## 3. 배포 흐름
-
-### 3-1. 사전 준비
-
-Windows ADK에 대한 Windows PE 추가 기능은 본 프로그램에 포함되어 있지 않습니다.
-Microsoft 공식 페이지에서 다운로드하여 미리 설치하십시오.
-
-https://learn.microsoft.com/ko-kr/windows-hardware/get-started/adk-install
-
-### 3-2. WinPE 생성
-
-`makePE.bat`를 관리자 권한으로 실행하면 `boot` 폴더에 `boot.sdi`와
-`boot.wim`이 생성됩니다.
-
-`makePE.bat`와 같은 폴더에는 다음이 준비되어 있어야 합니다.
-
-| 폴더 / 파일 | 용도 |
-|---|---|
-| `system32\` | WinPE의 `\Windows\System32`로 복사 (`startnet.cmd` 등) |
-| `pe_files\` | WinPE의 `X:\restore\`로 복사 (DVT 스크립트, `aria2c.exe`, `wimlib-imagex.exe`와 필요한 DLL, `aria2.conf.100`, `aria2.conf.1G`) |
-| `nircmd-x64\nircmd.exe` | WinPE `System32`로 복사 (필수, 없으면 중단) |
-| `drivers\` | (선택) 모든 클라이언트 공통으로 넣을 드라이버. 하위 폴더 포함 주입 |
-| `source\` | 자동 생성. ADK의 `winpe.wim`, `boot.sdi` 사본 보관 |
-
-동작 요약: ADK의 `winpe.wim`을 로컬 작업 폴더(`%SystemDrive%\WinPE_LocalBuild`)에서
-마운트 → ScratchSpace 512MB 설정 → 파일 복사 → 레지스트리(NumLock 초기 상태) 설정 →
-드라이버 주입 → 저장 후 `boot\boot.wim`으로 이동합니다. 작업이 로컬 드라이브에서
-이루어지므로 OneDrive 등 동기화 폴더 안에서 실행해도 마운트 폴더가 꼬이지 않습니다.
-(최종 `boot` 폴더만 `makePE.bat` 위치에 생성)
-
-> 중간에 실패한 뒤 재실행할 때 이미지가 마운트된 채로 남아 있으면
-> `dism /Cleanup-Wim`을 실행하고, 필요하면 `%SystemDrive%\WinPE_LocalBuild\workdir`
-> 폴더를 삭제한 뒤 다시 실행하십시오.
-
-### 3-3. 배포 이미지 및 토렌트 생성
-
-`DVT_backup` 폴더 구성은 다음과 같습니다.
-
-| 경로 | 필수 | 설명 |
+| | Client local boot | USB / CD media |
 |---|---|---|
-| `DVT_backup\backup.wim` | 필수 | 배포할 이미지. **인덱스 1**이 적용됩니다. UEFI/GPT로 부팅 가능한 Windows 이미지여야 합니다. |
-| `DVT_backup\dvt_check.txt` | 필수 | 시더 확인용 작은 텍스트 파일(수 KB) |
-| `DVT_backup\drivers\` | 선택 | 있으면 복원 직후 DISM으로 `/Recurse` 주입 |
-| `DVT_backup\files\` | 선택 | 있으면 내용물을 복원된 OS의 `\temp\`로 이동 |
-| `DVT_backup\files\setpc.bat` | 선택 | 있으면 복원된 OS의 **첫 로그인 시 자동 실행**(RunOnce 등록) |
+| Build PC | `make_pe.bat` → `boot\` folder | `make_media.bat` → ISO or USB drive |
+| Client PC, before WinPE | `host\make_boot.bat` in Windows (once per PC) | nothing — boot from the media |
+| WinPE main script | `pe\start_dvt.bat` | `Media\pe\start_media.bat` |
+| IP address | detected in Windows (static IP → `ip.txt`) | static IP from `ip.txt` (operator types the last octet) or DHCP, order by `DHCP_ENABLE` |
+| Disk to erase | detected (`DVT.tag`) | typed by the operator |
+| Failure before erasing | reboots into the old Windows | waits for a key, then reboots |
+| WinPE settings | `pe\config.cmd` (inside `boot.wim`) | `Media\pe\config.cmd` (also on the media, editable on a USB drive) |
 
-1. 배포할 `backup.wim`과 필요한 파일을 위 구성대로 `DVT_backup` 폴더에 복사합니다.
-2. **시더 확인용 파일 `dvt_check.txt`(수 KB의 작은 텍스트 파일)를 `DVT_backup`
-   폴더에 함께 넣습니다.** 이 파일은 디스크 초기화 전에 시더 접속을
-   확인하는 데 사용되며, 토렌트에 포함되어 있지 않으면 확인이 실패합니다.
-3. `DVT_backup` 폴더에 대한 토렌트 파일을 생성합니다. (기본 파일명 `DVT_backup.torrent`)
-   - 토렌트의 **최상위 폴더 이름이 `DVT_backup`** 이어야 합니다. (복원 스크립트가
-     `<드라이브>:\DVT_backup\backup.wim` 경로를 찾습니다.)
-   - **클라이언트가 접근 가능한 트래커를 반드시 지정**합니다. (DHT/PEX/LPD 비활성)
-4. 시더에서 `DVT_backup` 폴더를 시딩합니다. (시딩 방법은 별도 문서 참조)
+Both ways check the gateway and the seeder **before** anything is erased, and
+both use the same torrent, aria2 profiles, download and restore
+(`restore.bat`, `setpc.bat`).
 
-> 복원되는 이미지에는 `\temp` 폴더가 있는 것을 권장합니다. 복원 스크립트가 IP 정보(`ip.txt`)와
-> `files` 폴더의 내용을 `\temp`로 복사·이동하는데, 폴더가 없으면 실패할 수 있습니다. [확인]
+### Client local boot
 
-### 3-4. 클라이언트 배포
+```
+[1] Build PC ── make_pe.bat
+      ADK winpe.wim + DVT scripts + aria2c, wimlib
+      → boot\ folder (boot.wim, boot.sdi, host scripts)
+         │
+         │  copy boot\ to C:\temp\boot on the client
+         ▼
+[2] Client PC (Windows) ── host\make_boot.bat
+      • detect the IP address and link speed
+      • export the network drivers
+      • add drivers, ip.txt, torrent, aria2.conf to boot.wim
+      • write DVT.tag on the Windows drive
+      • add a one-time boot entry
+         │
+         │  reboot
+         ▼
+[3] Client PC (WinPE) ── start_dvt.bat
+      • find the target disk (DVT.tag)
+      • configure the network
+      • check the gateway and seeder   ← a failure up to here reboots into
+                                          the old Windows, disk untouched
+      • erase the disk, create partitions
+      • download by torrent (aria2c)
+         │
+         │  download complete (aria2c keeps seeding)
+         ▼
+    restore.bat
+      • apply the WIM, drivers, bcdboot, setpc.bat
+         │
+         ▼
+    reboot into the restored Windows
+```
 
-**재부팅 전 점검 (필수)**
+### USB / CD media
 
-- [ ] 시더와 트래커가 실행 중이며 클라이언트에서 접근 가능한가
-- [ ] 대상 디스크의 중요 데이터를 백업했는가
-- [ ] 열려 있는 작업을 모두 저장했는가 (`makeboot.bat`가 마지막에 강제 재부팅)
-- [ ] 대상이 아닌 디스크 중 **이동식 디스크(USB, SD 카드 등)** 가 연결되어 있지 않은가
-      (`DVT.tag`를 찾지 못한 경우 파일시스템이 RAW인 첫 볼륨이 대상이 되므로, 포맷되지 않은
-      이동식 매체는 반드시 분리)
-- [ ] 다른 로컬 디스크가 있다면, 그 디스크에 **`\DVT_backup` 폴더가 없는지**(다운로드 전에 삭제됨) 확인했는가
-- [ ] 이전 실행에서 남은 `C:\temp\ip.txt`가 없는가 (DHCP 환경에서도 이전 파일이 그대로
-      복사되어 고정 IP로 설정될 수 있음)
+```
+[1] Build PC ── make_media.bat
+      source\winpe.wim (clean ADK copy)
+      + pe_tools, drivers, nircmd
+      + Media\pe  (only these scripts)
+      → media_out\boot.wim
+      + Media\adk_media, Media\config, Media\pe\config.cmd
+      → ISO (oscdimg) or USB drive
+         │
+         │  boot from the USB drive / CD
+         ▼
+[2] Client PC (WinPE) ── startnet.cmd
+      • copy <media>\config\* → X:\restore
+         ▼
+    start_media.bat
+      • network order (DHCP_ENABLE: static first / DHCP first)
+      • show the disks, enter "150.0" (last IP octet.disk number)
+      • check the gateway
+      • link.exe → aria2.conf for the link speed
+      • check the seeder              ← nothing is erased if a step up to
+                                         here fails
+      • erase the disk, create partitions
+      • choose the download drive, download by torrent (aria2c)
+         │
+         │  download complete (aria2c keeps seeding)
+         ▼
+    restore.bat
+      • apply the WIM, drivers, bcdboot
+      • move files, setpc.bat
+         │
+         ▼
+    reboot (remove the USB drive / CD)
+```
 
-**절차**
+The media image does **not** use `boot\boot.wim` or the `pe` folder:
+`X:\restore` contains only the tools of `pe_tools` and the files of
+`Media\pe`.
 
-1. 클라이언트에 다음과 같이 파일을 배치합니다. (`makeboot.bat`가 이 경로를 사용합니다.)
+## Features
 
-   ```
-   C:\temp\
-   ├─ backup.torrent
-   └─ boot\
-      ├─ boot.wim, boot.sdi            ← makePE.bat 결과
-      ├─ makeboot.bat, setbcd.bat
-      └─ getip.bat, getlinkspeed.bat, getnetdrv.bat, printip.bat
-   ```
-   [확인: `makePE.bat`는 위 보조 스크립트를 `boot` 폴더에 복사하지 않으므로, 배포 패키지에서 함께 넣는지 확인]
+- **BitTorrent distribution** with aria2c; the restore starts as soon as the
+  download is complete, and the PC keeps seeding while the image is applied.
+- **Safety checks before erasing**: target disk, network, gateway and a real
+  seeder download are verified first. Nothing is erased when one of them fails.
+- **Target disk detection** by a marker file (`DVT.tag`) written from the
+  running Windows, with an explicit override and a careful fallback. Anything
+  ambiguous is an error. On the USB / CD media the operator chooses the disk;
+  the boot media itself cannot be chosen.
+- **UEFI and legacy BIOS**: GPT or MBR layout and the `bcdboot` firmware type
+  are chosen automatically. The ISO and the USB drive boot on both.
+- **Static IP or DHCP**: a static address used by Windows is carried into WinPE
+  and applied to whichever adapter reaches the gateway. The media tries a
+  static IP or DHCP first (`DHCP_ENABLE`) and falls back to the other.
+- **Network drivers from the running PC** are exported and injected into WinPE,
+  so NICs that WinPE does not support out of the box still work.
+- **Link-speed profiles**: separate aria2 settings for 100 Mbps and 1 Gbps links.
+- **Post-restore tasks**: extra files are copied to `C:\temp` and an optional
+  `setpc.bat` runs once at the first Windows start.
+- **One-time boot entry** that is removed automatically.
+- **USB / CD media** for PCs without a working Windows; its settings can be
+  changed on the USB drive without rebuilding.
+- **Large IP display** on the client so you can identify a PC from across the room.
 
-   - **클라이언트마다 원본(가공 전) `boot` 폴더를 새로 복사**하십시오. 한 번 `makeboot.bat`를
-     실행한 `boot.wim`에는 이미 `aria2.conf`가 만들어져 있어 다시 실행하면 실패합니다.
-2. 클라이언트에서 `makeboot.bat`를 실행합니다. 이 스크립트는 다음을
-   수행합니다.
-   - 시스템 드라이브의 `DVT.tag` 마커 생성 (다른 드라이브의 기존 `DVT.tag`는 먼저 삭제)
-   - **고정 IP인 경우에만** 현재 IP를 `C:\temp\ip.txt`에 저장 (DHCP이면 저장하지 않음)
-   - 링크 속도를 감지하여 aria2 설정 선택 (3-5절 참조)
-   - 연결된 물리 어댑터의 **네트워크 드라이버를 추출**(`boot\netdrv`).
-     **Realtek 어댑터는 제외**되며, 이 경우 드라이버 주입을 건너뛰고 WinPE 기본 드라이버에 의존합니다.
-   - 추출한 드라이버·`ip.txt`·`C:\temp\backup.torrent`를 `boot.wim`에 통합
-   - BCD에 WinPE 부팅 항목을 추가하고 **다음 부팅 1회만** WinPE로 부팅하도록 설정
-     (부팅 메뉴 대기 시간도 5초로 변경됨)
-   - 완료 화면에 IP 마지막 자리를 크게 표시하고, 키 입력 후 **10초 뒤 자동 재부팅**
-3. 재부팅되면 다음 순서로 자동 진행됩니다.
+## Requirements
 
-   | 단계 | 내용 | 비고 |
-   |---|---|---|
-   | 0 | WinPE 부팅(`wpeinit`), 방화벽 해제, 고성능 전원 관리, 문제 확인용 최소화 명령 창 열기 | |
-   | 1 | **대상 디스크 탐색** (아직 초기화하지 않음) | 4절 규칙. 대상이 없으면 오류 메시지 후 **5초 뒤 자동으로** 기존 OS로 재부팅 |
-   | 2 | IP 설정 | `ip.txt`가 있으면 고정 IP, 없으면 DHCP (3-6절). DHCP를 약 1분 기다려도 실패하면 **아무 키나 누르면** 기존 OS로 재부팅 |
-   | 3 | 게이트웨이 ping 확인 | 실패하면 **디스크 초기화 없이** 10초 뒤 기존 OS로 재부팅 |
-   | 4 | 시더 접속 확인 (`check_seeder.bat`) | 확인용 파일 `dvt_check.txt`를 받아 봄. 실패하면 **디스크 초기화 없이** 10초 뒤 기존 OS로 재부팅 |
-   | 5 | **대상 디스크 초기화** (`makedisk.bat`) | 이 시점부터 기존 OS 사용 불가. GPT 변환, EFI(FAT32, 256MB, `S:`) + Windows(NTFS, 나머지, `T:`) |
-   | 6 | 이미지 다운로드 | 4절의 규칙으로 고른 드라이브의 기존 `\DVT_backup`을 지우고 aria2c로 다운로드. 진행 상황 표시. 시더 접속 불가 시 접속될 때까지 무한 대기 |
-   | 7 | WIM 복원 (`restore.bat`) | 다운로드 완료 시 자동 실행. 3-7절 참조 |
-   | 8 | 재부팅 | 복원된 OS로 부팅 |
+**Build PC**
 
-> `makeboot.bat`가 만든 `boot.wim`에는 해당 클라이언트의 IP·드라이버 정보가
-> 들어 있습니다. **클라이언트마다 별도로 실행**해야 하며, 가공된 `boot.wim`을
-> 다른 PC에 복사하거나 외부로 반출하지 마십시오.
+- Windows 10/11 x64, administrator rights
+- [Windows ADK](https://learn.microsoft.com/windows-hardware/get-started/adk-install)
+  and the **Windows PE add-on** (amd64). The USB / CD media also needs the
+  **Deployment Tools** of the ADK, on the first run only (see below).
+- `aria2c.exe` and `wimlib-imagex.exe` (with its DLL), placed in `pe_tools\` or `system32\`
+- `nircmd.exe` (x64), placed in `nircmd-x64\`
+- USB / CD media only: a 64-bit `link.exe` in `Media\pe`. It is used as it is
+  (nothing is compiled); `make_media.bat` stops when it is missing.
 
-> 시더 확인 실패 등으로 기존 OS에 돌아오면, WinPE 부팅 항목은 기존 OS의 다음 부팅 때
-> 작업 스케줄러 작업(`WinPE_BCD_Cleanup`)이 자동으로 삭제합니다.
+`make_media.bat` stores the ADK `Media` folder in `Media\adk_media`, and
+oscdimg, the boot sector files and bootsect in `Media\adk_tools`. Later runs
+use only the stored copies (and `source\winpe.wim`, shared with
+`make_pe.bat`). `make_pe.bat` does not have to run first.
 
-### 3-5. 링크 속도에 따른 aria2 설정
+**Client PCs**
 
-`getlinkspeed.bat`가 사용 중인 첫 번째 물리 어댑터의 링크 속도를 읽어 설정 파일을 고릅니다.
-(어댑터가 여러 개이면 기본 경로를 쓰는 어댑터가 아닌 다른 어댑터가 선택될 수 있습니다. [확인])
+- Client local boot: Windows 10/11 x64 with administrator rights (to run `make_boot.bat`)
+- USB / CD media: a PC that can boot from USB or CD (UEFI or BIOS)
+- Wired network connection to the deployment network
 
-| 링크 속도 | 설정 파일 | 주요 설정 |
+**Deployment network**
+
+- A BitTorrent **tracker** reachable from the clients. DHT, peer exchange and
+  local peer discovery are disabled in the aria2 profiles, so peers are found
+  through the tracker only.
+- At least one **seeder** that has the complete `DVT_backup` folder.
+
+## Repository layout
+
+```
+dvt/
+├─ make_pe.bat              build the WinPE image (build PC)
+├─ make_test_pe.bat         build the test WinPE image (build PC)
+├─ make_media.bat           build the USB / CD media: ISO, new USB drive,
+│                           or update a USB drive (build PC)
+├─ host/                    Windows-side scripts (client PC)
+│  ├─ config.cmd            settings for the host scripts and make_pe.bat
+│  ├─ make_boot.bat         prepare a client PC and restart into WinPE
+│  ├─ get_host_ip.bat       IP address and static/DHCP detection
+│  ├─ get_link_speed.bat    link speed -> aria2 profile
+│  ├─ export_net_drivers.bat
+│  ├─ prepare_mount_dir.bat
+│  ├─ set_bcd.bat           one-time WinPE boot entry
+│  └─ show_ip.bat           IP address in large digits
+├─ pe/                      WinPE scripts (copied to X:\restore)
+│  ├─ config.cmd            settings for the WinPE scripts
+│  ├─ startnet.cmd          WinPE entry point
+│  ├─ start_dvt.bat         main flow
+│  ├─ restore.bat           apply the image, boot files, clean-up
+│  ├─ start_restore.bat     called by aria2c when the download is complete
+│  ├─ aria2.conf.100        aria2 profile for 100 Mbps links
+│  ├─ aria2.conf.1G         aria2 profile for 1 Gbps links
+│  └─ ...                   helper scripts (see Script reference)
+├─ Media/                   USB / CD media
+│  ├─ config.cmd            settings for make_media.bat (loads host\config.cmd)
+│  ├─ link.au3              source of link.exe (reference only)
+│  ├─ config/               copied to <media>\config
+│  │  ├─ DVT_backup.torrent
+│  │  ├─ aria2.conf.100
+│  │  ├─ aria2.conf.1G
+│  │  ├─ ip.txt             static IP (see ip.txt.example)
+│  │  └─ ip.txt.example
+│  ├─ pe/                   every WinPE script of the media -> X:\restore
+│  │  ├─ config.cmd         settings for the media WinPE scripts
+│  │  │                     (also copied to <media>\config)
+│  │  ├─ startnet.cmd       find the media, copy config\, start start_media.bat
+│  │  ├─ start_media.bat    main flow
+│  │  ├─ get_input.bat      disk list, IP last octet and disk number
+│  │  ├─ getdiskinfo.bat    disk list
+│  │  ├─ set_ip.bat         static IP from arguments (ip, mask, gateway)
+│  │  ├─ get_target.bat     download drive, never the boot media
+│  │  ├─ restore.bat        apply, move files, remind to remove the media
+│  │  ├─ link.exe           aria2.conf by link speed (64-bit, required)
+│  │  └─ ...                copies of pe scripts: check_gateway, check_seeder,
+│  │                        get_firmware, get_ip, make_disk, ping_host,
+│  │                        start_restore, wait
+│  ├─ adk_media/            stored copy of the ADK WinPE "Media" folder
+│  └─ adk_tools/            stored oscdimg.exe, etfsboot.com, bootsect.exe,
+│                           efisys.bin (= ADK efisys_noprompt.bin, renamed)
+├─ test/                    test image scripts (see Test image)
+│  ├─ test_config.cmd       FTP server and test settings
+│  ├─ startnet.cmd          test WinPE entry point
+│  ├─ start_test.bat        test flow: network, gateway, seeder, upload
+│  └─ upload_ftp.bat        FTP upload (curl.exe or ftp.exe)
+│
+│  ── not in the repository, provided by you ──
+├─ pe_tools/                aria2c.exe, wimlib-imagex.exe, DLLs -> X:\restore
+├─ system32/                optional files -> X:\Windows\System32
+├─ drivers/                 optional drivers added to every WinPE image
+├─ nircmd-x64/nircmd.exe
+│
+│  ── created by the build scripts ──
+├─ source/                  clean winpe.wim and boot.sdi from the ADK
+├─ boot/                    make_pe.bat: boot.wim + boot.sdi + host scripts
+│                           (copy this folder to the client as C:\temp\boot)
+├─ boot_test/               make_test_pe.bat (same use as boot/)
+└─ media_out/               make_media.bat: boot.wim of the media, DVT_media.iso
+```
+
+## Quick start — client local boot
+
+### 1. Build the WinPE image (build PC)
+
+1. Install the Windows ADK and the WinPE add-on.
+2. Put `aria2c.exe`, `wimlib-imagex.exe` and its DLL in `pe_tools\`,
+   and `nircmd.exe` in `nircmd-x64\`.
+3. Optionally add drivers to `drivers\` (e.g. storage drivers for new hardware,
+   or the WinPE driver for [Realtek NICs](#realtek-nics)).
+4. Review `pe\config.cmd` (see [Configuration](#configuration)).
+5. Run `make_pe.bat`. It asks for elevation if needed.
+
+The result is the `boot\` folder: `boot.wim`, `boot.sdi` and a copy of every
+file in `host\`. This folder is everything a client PC needs besides the torrent.
+
+> The mount and work folders are on the local system drive
+> (`C:\WinPE_LocalBuild`). Do not move them into a folder synced by OneDrive,
+> Dropbox or similar: sync clients can bring back deleted files after the unmount.
+
+### 2. Prepare the torrent and the seeder
+
+See [Preparing the torrent](#preparing-the-torrent). Start the tracker and the seeder.
+
+### 3. Prepare each client PC
+
+Copy the `boot\` folder from the build PC to `C:\temp\boot`, and the torrent
+to `C:\temp`:
+
+```
+C:\temp\
+├─ boot\
+│  ├─ boot.wim
+│  ├─ boot.sdi
+│  ├─ make_boot.bat
+│  ├─ config.cmd
+│  └─ ...             (the other host scripts)
+└─ DVT_backup.torrent
+```
+
+Run `C:\temp\boot\make_boot.bat`. It:
+
+1. detects the IP address (a static address is saved to `ip.txt`: ip, subnet
+   and gateway, one per line),
+2. reads the link speed and picks `aria2.conf.100` or `aria2.conf.1G`,
+3. exports the drivers of the connected network adapters,
+4. mounts `boot.wim` and adds the drivers, `ip.txt`, the torrent and `aria2.conf`,
+5. writes `DVT.tag` to the Windows drive,
+6. adds a one-time WinPE boot entry,
+7. shows the IP address in large digits and restarts after a key press.
+
+### 4. Let it run
+
+The PC boots into WinPE and restores itself. The console color tells you the state:
+
+| Console | Meaning |
+|---|---|
+| Light gray background | Checking, partitioning, downloading |
+| Green background (new "DVT Restore" window) | Restore running, then completed and rebooting |
+| Red background | Failed — read the message on screen |
+
+If a check fails **before** the disk is erased, the PC reboots back into its
+old Windows after a few seconds. If something fails **after** the disk was
+erased, DVT waits for a key so you can read the error.
+
+## Quick start — USB / CD media
+
+1. Prepare the torrent and the seeder (see
+   [Preparing the torrent](#preparing-the-torrent)).
+2. Put the files in `Media\config`: `DVT_backup.torrent`, `aria2.conf.100`,
+   `aria2.conf.1G`, and `ip.txt` for a static IP (see [Network](#network)).
+3. Review `Media\pe\config.cmd` (see [Configuration](#configuration)).
+4. Run `make_media.bat` in the build folder as administrator and choose:
+   - `1` ISO → `media_out\DVT_media.iso`, burn it to a CD / DVD
+   - `2` USB → the selected **USB** disk is erased and made bootable
+     (FAT32 on the whole disk; `USB_FS` and `USB_PART_MB` in `Media\config.cmd`)
+   - `3` update → copies new files to an existing DVT USB drive
+
+   `make_media.bat iso`, `make_media.bat usb` and `make_media.bat update` skip
+   the menu.
+5. Boot the client PC from the media, read the disk list, and type
+   `<last octet>.<disk>` (e.g. `150.0`) for a static IP, or only the disk
+   number for DHCP, then `Y`.
+6. When the restore is done the PC reboots in 15 seconds — remove the media.
+
+> [!WARNING]
+> The disk number you type is **erased**. Check the disk list carefully. The
+> disk of the boot USB drive cannot be selected.
+
+Failures on the media always wait for a key, because an operator is present.
+
+## Test image
+
+`make_test_pe.bat` builds a **test** WinPE image that checks a client PC
+end to end without touching any disk. Use it to find network, driver and
+seeder problems before the real restore. It is started the same way as the
+client local boot (`make_boot.bat`).
+
+In WinPE the test image:
+
+1. sets up the network exactly like the restore image (static IP from
+   `ip.txt`, otherwise DHCP) and checks the gateway,
+2. runs the seeder check (downloads `dvt_check.txt` only, into memory),
+3. writes a report `<ip>.txt` (IP, gateway, adapter, link profile, seeder,
+   firmware, detected target disk, model, `diskpart list disk`,
+   `detail disk` of the target disk, `ipconfig /all`),
+4. uploads it to the FTP server and reboots back into Windows.
+
+The erase and restore scripts (`make_disk.bat`, `restore.bat`,
+`start_restore.bat`, `start_dvt.bat`) are **not** copied into the test image.
+
+Steps:
+
+1. Set the FTP server in `test\test_config.cmd`:
+   `FTP_HOST`, `FTP_PORT`, `FTP_USER`, `FTP_PASS` and, optionally, `FTP_DIR`
+   (relative to the login folder). Do not use `!` or `"` in these values.
+2. Run `make_test_pe.bat` on the build PC. The result is the `boot_test\` folder.
+3. On the client, copy `boot_test\` to `C:\temp\boot` (instead of `boot\`),
+   put the torrent in `C:\temp` and run `make_boot.bat` as usual.
+
+| Screen | Meaning |
+|---|---|
+| Green "PASS" | Gateway and seeder OK, `<ip>.txt` uploaded, rebooting |
+| Red "TEST FAILED" | A check or the upload failed. Reboots after `FAIL_REBOOT_SEC` (`TEST_FAIL_REBOOT=1`, default); `TEST_FAIL_REBOOT=0` waits for a key |
+
+With `TEST_UPLOAD_FAIL=1` a failed test also uploads `<ip>_FAIL.txt` when an IP
+address was set. The FTP client is `curl.exe` (passive mode, creates `FTP_DIR`)
+or, as a fallback, `ftp.exe` (active mode only, `FTP_DIR` must exist). WinPE
+contains neither: `make_test_pe.bat` copies them from the build PC unless you
+put them in `pe_tools\` or `system32\`. The FTP settings are built into the
+image, so rebuild it after changing them.
+
+## Preparing the torrent
+
+The torrent must contain a single top folder named `DVT_backup` (`DL_NAME`):
+
+```
+DVT_backup\
+├─ backup.wim        the Windows image (index 1 is applied)        required
+├─ dvt_check.txt     small file (a few KB) for the seeder check    required
+├─ drivers\          drivers added to the restored Windows         optional
+└─ files\            copied to C:\temp of the restored Windows     optional
+   └─ setpc.bat      runs once at the first Windows start          optional
+```
+
+- Create `dvt_check.txt` **before** creating the torrent. WinPE downloads only
+  this file to prove that a seeder is reachable before it erases anything.
+- Put the tracker URL in the torrent. Alternatively set
+  `SEEDER_EXTRA_OPTS=--bt-tracker=http://...` in `pe\config.cmd` or
+  `Media\pe\config.cmd` (this is used for the seeder check only; the main
+  download reads the torrent and `aria2.conf`).
+- Save the torrent as `DVT_backup.torrent`: in `C:\temp` of each client for the
+  client local boot, in `Media\config` for the media.
+- When the client uses a static IP, `ip.txt` (ip, subnet, gateway) is also
+  copied to `C:\temp` of the restored Windows, so `setpc.bat` can set the
+  address again.
+
+> [!WARNING]
+> `dvt_check.txt` must **not be an empty 0-byte file.** There is no data to
+> download, so aria2c "completes" it without reaching any seeder and the check
+> would prove nothing. `check_seeder.bat` therefore fails the check, before
+> the disk is erased, when `dvt_check.txt` in the torrent is 0 bytes ("The
+> seeder check file in the torrent is empty"). Always put a file with content
+> (a few KB) in the folder before you create the torrent. If you change the
+> file, create the torrent again.
+
+## Choosing the disk to erase
+
+### Client local boot
+
+`get_disk.bat` decides which disk is erased, in this order:
+
+1. **`FORCE_DISK`** in `pe\config.cmd`, if set.
+2. The disk of the volume that contains **`DVT.tag`**. `make_boot.bat` writes
+   this file to the running Windows drive and deletes it from all other drives.
+3. Only when `AUTO_DISK_FALLBACK=1`:
+   1. the disk of the **only** unformatted (RAW) volume, or
+   2. the **only** disk in the PC.
+
+A tag on more than one disk, more than one RAW volume, or more than one disk
+without a tag is treated as an error, so DVT never guesses. Set
+`AUTO_DISK_FALLBACK=0` to require the tag file.
+
+The tag is deleted from the restored Windows, so the next run starts clean.
+
+### USB / CD media
+
+There is no `DVT.tag`. `get_input.bat` shows the disk list and the operator
+types the disk number (`R` scans the disks again). The disk must exist, and
+the disk of the boot media cannot be selected. With `MEDIA_CONFIRM=1`
+(default) the operator confirms with `Y` before the disk is erased.
+
+## Network
+
+### Client local boot
+
+- **DHCP** (default): WinPE waits for an address (`DHCP_WAIT_TRIES` × 2 s) and
+  uses the default route with the lowest metric.
+- **Static IP**: if Windows used a static address, `make_boot.bat` stores the
+  address, subnet mask and gateway in `ip.txt` inside the image, one value per
+  line:
+  ```
+  203.244.132.150
+  255.255.255.0
+  203.244.132.1
+  ```
+  WinPE applies these three values with `NET_DNS1/2` (an `ip.txt` with the
+  address only gets `NET_MASK` and the gateway `x.x.x.1`), tries every
+  connected adapter, keeps the first one that reaches the gateway (and
+  `NET_TEST_HOST`, if set) and returns the others to DHCP.
+- **Link speed**: `make_boot.bat` measures it. Links of 1 Gbps or faster get
+  `aria2.conf.1G`; everything else gets `aria2.conf.100`. The console color on
+  the client shows which one was chosen (`COLOR_LINK_*` in `host\config.cmd`).
+
+### USB / CD media
+
+The order is set by `DHCP_ENABLE` in `Media\pe\config.cmd`.
+
+| `DHCP_ENABLE` | `ip.txt` | What happens |
 |---|---|---|
-| 1 Gbps 이상 | `aria2.conf.1G` | 업로드 제한 없음, 최대 피어 100, 디스크 캐시 128MB, `falloc` |
-| 100 Mbps / 10 Mbps | `aria2.conf.100` | 업로드 제한 8M, 최대 피어 30, `file-allocation=none` |
-| 판별 실패 | `aria2.conf.100` | `getlinkspeed.bat`가 오류를 반환하면 `makeboot.bat`가 중단됨 |
+| `0` or empty (default) | exists | **Static IP first.** The operator enters the last octet and the disk number; the address is applied and the gateway is tested. If the test fails, every adapter is switched to DHCP and the DHCP gateway is tested. When that works, WinPE shows that the static IP failed but DHCP succeeded and continues with DHCP and the disk selected before (`DHCP_FALLBACK_CONFIRM=1`: asks first, `N` stops). |
+| `1` | exists | **DHCP first.** WinPE waits up to `DHCP_FIRST_TRIES` × 2 s (20 s) for a DHCP address and tests its gateway. When both work, only the disk number is asked. Otherwise the static IP is used: the operator enters the last octet and the disk number, and the address is applied and tested. |
+| any | missing | **DHCP only.** Only the disk number is asked. |
 
-공통: DHT·PEX·LPD 비활성, 다운로드 완료 시 `start_restore.bat` 실행, 완료 후 시딩 `seed-time=60`(분).
-클라이언트도 다운로드 중에 다른 클라이언트에게 업로드(피어 공유)합니다.
-완료 후에는 복원 스크립트가 `aria2c.exe`를 종료하므로 시딩은 이어지지 않습니다.
+When no way works, WinPE stops before anything is erased and waits for a key
+to reboot.
 
-`makeboot.bat` 완료/실패 화면의 배경색은 링크 속도를 나타냅니다. (1G 이상 초록, 100M 회색,
-10M 빨강) 실패 화면도 빨강이므로, 빨간 화면에서는 메시지를 확인하십시오.
+`ip.txt` in `Media\config` has the same three-line format as above, but
+line 1 is a base address: only its first three octets are used (`ipr`), and
+the operator types the last one.
 
-### 3-6. IP 설정 규칙
+```
+203.244.132.0
+255.255.255.0
+203.244.132.1
+```
 
-- **고정 IP 클라이언트** (`ip.txt` 있음): DNS `8.8.8.8` / `8.8.4.4`로 **고정 적용**합니다. 
-- 연결된 어댑터를
-  차례로 시도하여 게이트웨이에 ping이 되는 어댑터를 선택합니다.
-- **DHCP 클라이언트** (`ip.txt` 없음): DHCP로 받은 기본 경로의 IP를 사용합니다.
-- 고정 IP 적용에 실패하면 해당 어댑터를 DHCP로 되돌립니다. 이후 단계는 계속 진행되므로,
-  DHCP로 게이트웨이가 확보되면 **의도한 고정 IP가 아닌 DHCP 주소로 배포가 진행될 수 있습니다.**
-  
+Line 2 (subnet) and line 3 (gateway) may be omitted (`NET_MASK`, and `ipr.1`),
+so an address-only `ip.txt` also works. Lines starting with `#` are ignored.
+Save it as ANSI / ASCII, not UTF-8 with BOM.
 
-### 3-7. 복원 단계 동작
+When the static IP works, a new `ip.txt` with the values actually applied (ip,
+subnet, gateway) is written and moved to `T:\temp\ip.txt` for `setpc.bat`.
+With DHCP (also after the fallback) no `ip.txt` is written.
 
-다운로드가 끝나면 `restore.bat`가 다음을 수행합니다. 각 단계의 성공 여부는 검사하지 않고
-끝까지 진행합니다.
+The link speed is measured in WinPE by `link.exe`, which renames
+`aria2.conf.1G` or `aria2.conf.100` to `aria2.conf` (`LINK_FALLBACK` when
+`link.exe` is missing or fails).
 
-1. `wimlib-imagex`로 `backup.wim`의 인덱스 1을 `T:`에 적용
-2. `DVT_backup\drivers\`가 있으면 DISM으로 드라이버 주입
-3. `bcdboot`로 `S:`(EFI)에 부팅 파일 생성 (로캘 `ko-kr` 고정)
-4. `aria2c.exe` 종료, `backup.wim` 삭제
-5. `X:\restore\ip.txt`가 있으면 `T:\temp\ip.txt`로 복사 (복원된 OS에서 `C:\temp\ip.txt`)
-6. `DVT_backup\files\`의 파일을 `T:\temp\`로 이동, `T:\temp\setpc.bat`이 있으면 첫 로그인 시
-   실행되도록 RunOnce 등록
-7. `DVT_backup` 폴더 삭제 후 재부팅
+### Realtek NICs
 
-### 시더 접속 확인에 대하여
+By default `make_boot.bat` does **not export Realtek network drivers**
+(`NETDRV_EXCLUDE=Realtek`). Realtek ships **separate drivers for WinPE**, and
+the regular Windows driver in WinPE can cause errors such as the **connection
+dropping** during the download. The USB / CD media does not export drivers at
+all, so it needs the driver in `drivers\` for every NIC that WinPE does not
+support.
 
-`check_seeder.bat`는 초기화 직전에 토렌트 안의 `dvt_check.txt`만 내려받아
-시더에 실제로 접속할 수 있는지 확인합니다. 다운로드 속도가 0인 상태가 제한 시간(기본 60초)
-동안 지속되면 실패로 보고, **총 2회(최초 1회 + 재시도 1회)** 시도한 뒤 실패로 처리합니다.
+> [!IMPORTANT]
+> If some PCs have Realtek NICs, put Realtek's **WinPE driver** in the
+> `drivers\` folder of the build PC (e.g. `drivers\realtek\`) and rebuild with
+> `make_pe.bat` and `make_media.bat`. The drivers in `drivers\` go into every
+> WinPE image.
+>
+> Emptying `NETDRV_EXCLUDE` to export Realtek's Windows driver is not
+> recommended.
 
-- 이 확인은 **확인 시점에** 시더가 접속 가능하다는 것만 보장합니다.
-  초기화 이후 다운로드 도중 시더가 꺼질 수 있으므로 5절의 장애 대응을
-  참고하십시오.
-- 본 다운로드에 DHT·트래커 관련 옵션을 사용한다면 `check_seeder.bat`의
-  `EXTRA_OPTS`에도 같은 옵션을 지정해야 확인 결과가 의미를 갖습니다.
-  (확인 단계는 `--enable-dht=false`만 적용하며 `aria2.conf`는 사용하지 않습니다.)
+## USB / CD media details
 
-| 반환 코드 | 의미 |
+### config folder
+
+`make_media.bat` copies these files from `Media\config` to `<media>\config`,
+plus `Media\pe\config.cmd`. When WinPE starts, `startnet.cmd` copies
+`<media>\config` to `X:\restore`, so on a USB drive you can change them
+without rebuilding. `<media>\config\config.cmd` replaces the `config.cmd`
+inside `boot.wim`, so its settings (`DHCP_ENABLE`, `MEDIA_CONFIRM`, ...) apply
+at the next boot. On a CD, change `Media\config` or `Media\pe\config.cmd` and
+rebuild.
+
+| File | Purpose |
 |---|---|
-| 0 | 시더 접속 성공 |
-| 1 | 다운로드 실패 또는 시간 초과 |
-| 2 | `aria2c.exe` 또는 토렌트 파일 없음 |
-| 3 | 토렌트에 `dvt_check.txt`가 포함되어 있지 않음 |
+| `DVT_backup.torrent` | required; its `dvt_check.txt` must not be empty (see [Preparing the torrent](#preparing-the-torrent)) |
+| `aria2.conf.1G`, `aria2.conf.100` | required; `link.exe` renames the one for the link speed to `aria2.conf` |
+| `ip.txt` | static IP base; tried first or as fallback (`DHCP_ENABLE`) |
+| `config.cmd` | copied from `Media\pe\config.cmd`; WinPE settings |
 
-## 4. 대상 디스크 선택 규칙
+`Media\pe\config.cmd` on the build PC is the original: making or updating a
+USB drive (`2`, `3`) copies it over a `config.cmd` that was changed on the
+drive.
 
-**초기화 대상 디스크**는 `get_disk.bat`가 다음 순서로 **하나만** 고르며, 선택된 디스크는
-**디스크 전체가 초기화**됩니다.
+### USB drive and ISO
 
-1. 루트에 `DVT.tag`가 있는 드라이브를 포함한 디스크
-   (`makeboot.bat` 실행 시 **시스템 드라이브(보통 C:)** 루트에 생성. 파일명은 `duhelp.tag`가 아니라 `DVT.tag`)
-2. 1번이 없을 때만: 파일시스템이 **RAW**인 **첫 번째 볼륨**을 포함한 디스크
+- A new USB drive gets one **FAT32** partition (`USB_FS=fat32`), which boots
+  on UEFI and BIOS PCs (BIOS through `bootsect`). The partition size is
+  `USB_PART_MB` in MB; empty (the default) uses the whole disk.
+- Windows before build 26300 cannot format more than 32 GB as FAT32 (build
+  26300 or later: up to 2 TB). On such a build PC, with a larger drive and an
+  empty `USB_PART_MB`, `make_media.bat` stops **before** erasing the disk.
+- **Recommended on a build PC before build 26300:** make the ISO (`1`) and
+  write it to the USB drive with [Rufus](https://rufus.ie). Rufus formats the
+  whole drive as FAT32 at any size, and the drive boots on UEFI and BIOS PCs.
+  In Rufus select the USB drive, select `media_out\DVT_media.iso`, keep the
+  file system **FAT32**, and write it in ISO image mode. The `config` folder is
+  part of the ISO, so the drive has the same files as one made with `2`; later
+  you can update it with `3`.
+- Other choices on such a build PC: `USB_PART_MB=32000` (the rest of the disk
+  stays unused) or `USB_FS=exfat` (whole disk, but many UEFI firmwares do not
+  boot from exFAT).
+- `make_media.bat` only writes to disks whose type is **USB**, never to the
+  disk that holds `%SystemDrive%`, and asks you to type `YES`.
 
-- **검색 범위**: 드라이브 문자 `C`~`W`를 검색합니다. 이 단계는 **이동식 디스크(USB 등)를
-  제외하지 않습니다.** RAW 규칙은 포맷되지 않은 USB/SD 카드도 선택할 수 있으므로 분리하십시오.
-- **복수 디스크**: 사양을 알고 있는 PC를 대상으로 하는 것을 전제로 합니다.
-  `DVT.tag`가 있으면 항상 그 디스크가 선택되고, RAW 규칙에서는 목록상 첫 RAW 볼륨의 디스크 하나만
-  선택됩니다. 그래도 사전에 디스크 구성을 확인하십시오.
-- **대상 디스크 없음**: 오류 메시지를 출력하고, **5초 뒤 자동으로** 기존 OS로 재부팅합니다.
+### Behavior in WinPE
 
-**다운로드 드라이브 선택** (`get_target.bat`, 초기화 이후)
+- **Reboot loop**: if the PC starts from the USB drive again after the restore,
+  it only stops at the input prompt — nothing is erased without input. The ISO
+  uses the no-prompt UEFI boot sector (`efisys_noprompt.bin`, stored as
+  `efisys.bin`), so a CD left in the drive also boots again without asking —
+  remove the CD while the restore counts down.
+- The download drive is chosen automatically (`get_target.bat`): the fixed
+  volume with the most free space, otherwise `T:`. The boot media is never
+  used, even when it is a USB hard disk.
 
-- 이미지는 `T:`(새 Windows 파티션)이 아니라, **`T:`·`S:`·`X:`를 제외한 로컬 고정 디스크 중
-  여유 공간이 가장 큰 드라이브**에 내려받습니다. 그 드라이브의 기존 `\DVT_backup` 폴더와
-  `DVT_backup.aria2`는 **삭제**됩니다. 해당하는 드라이브가 없으면(단일 디스크 PC) `T:`에
-  내려받습니다.
-- 단일 디스크 PC에서는 `T:`에 **이미지 크기 + 복원된 OS 크기**를 합친 여유 공간이 필요합니다.
-  부족하면 다운로드 또는 복원이 실패합니다. [확인: 이미지 크기 기준 필요 용량]
+### Maintenance
 
-## 5. 장애 시 대응
+The scripts in `Media\pe` that are copies of `pe` scripts must be updated by
+hand when the `pe` versions change.
 
-| 상황 | 동작 | 복구 방법 |
+## Configuration
+
+Change values in these files, not in the scripts.
+
+| File | Used by |
+|---|---|
+| `host\config.cmd` | client PC (`make_boot.bat`) and build PC (`make_pe.bat`) |
+| `pe\config.cmd` | WinPE of the client local boot |
+| `Media\config.cmd` | `make_media.bat` (loads `host\config.cmd` first) |
+| `Media\pe\config.cmd` | WinPE of the USB / CD media |
+
+### `host\config.cmd` (client PC and build PC)
+
+| Variable | Default | Description |
 |---|---|---|
-| 대상 디스크 없음 | 오류 메시지 출력 후 5초 뒤 자동으로 이전 OS로 재부팅 | `DVT.tag` 파일 또는 디스크 구성을 확인 |
-| DHCP IP 획득 실패 (IP 설정 단계) | 약 1분 대기 후 "Press any key to Reboot!" 표시, 키 입력 시 이전 OS로 재부팅. 디스크는 초기화하지 않음 | 네트워크 환경(DHCP, 케이블)을 점검한 뒤 재시도 |
-| 고정 IP 적용 실패 | 어댑터를 DHCP로 되돌리고 다음 단계로 진행 | `ip.txt`에서 ip, subnet, gateway를 불러옴 |
-| 게이트웨이 응답 없음 | 디스크를 초기화하지 않고 10초 뒤 이전 OS로 재부팅 | 네트워크 환경을 점검한 뒤 재시도 |
-| 시더 접속 확인 실패 (초기화 이전) | 디스크를 초기화하지 않고 10초 뒤 이전 OS로 재부팅 | 시더·트래커 실행 여부, 방화벽, `dvt_check.txt` 포함 여부를 점검한 뒤 재시도 |
-| 시더 접속 불가 (초기화 이후) | 접속될 때까지 무한 대기·재시도 | 시더를 복구하면 자동으로 이어서 진행 |
-| aria2c 오류 종료 (디스크 공간 부족 등, 초기화 이후) | "Download failed" 후 10초 뒤 재부팅 → **부팅 불가** | 복구 도구(별도 제공 예정) 또는 외부 부팅 매체 사용 |
-| 다운로드 중 전원 차단 | **부팅 불가** | 복구 도구(별도 제공 예정) 또는 외부 부팅 매체 사용 |
-| 복원 실패 | 오류를 검사하지 않고 끝까지 진행하므로 **부팅 불가**가 될 수 있음 | 복구 도구(별도 제공 예정) 또는 외부 부팅 매체 사용 |
-| `makeboot.bat` 실패 | 빨간 화면 표시. 마운트된 이미지는 자동으로 폐기(Discard) | 메시지 확인 후 **원본 `boot` 폴더를 새로 복사**하여 재실행. 마운트가 남았으면 `dism /Cleanup-Wim` |
+| `WORK_DIR` | `C:\temp` | Working folder on the client PC |
+| `BOOT_WIM` | `%WORK_DIR%\boot\boot.wim` | WinPE image to customize and boot |
+| `TORRENT` | `%WORK_DIR%\DVT_backup.torrent` | Torrent copied into the image |
+| `NETDRV_EXCLUDE` | `Realtek` | Regex; matching network drivers are not exported. Empty = export all. For Realtek, put the WinPE driver in `drivers\` (see [Realtek NICs](#realtek-nics)) |
+| `BOOT_MOUNT_DIR` | `%SystemDrive%\DVT_BootMount` | Local mount folder |
+| `TAG_FILE` | `DVT.tag` | Marker file for the disk to erase (must match `pe\config.cmd`) |
+| `BOOT_ENTRY_NAME` | `DVT WinPE` | Name of the boot menu entry |
+| `BCD_CLEANUP_MODE` | `2` | Removal of the boot entry: `1` from WinPE, `2` at the next Windows boot (scheduled task), `0` never |
+| `REBOOT_DELAY_SEC` | `10` | Delay before the restart into WinPE |
+| `ADK_PE_DIR`, `PE_LANG` | ADK amd64, `en-us` | Source of `winpe.wim` |
+| `BUILD_LOCAL` | `%SystemDrive%\WinPE_LocalBuild` | Local build folder |
+| `PE_SCRATCH_MB` | `512` | WinPE scratch space |
 
-부팅 불가 상태가 되면 BCD 항목이 함께 초기화되므로 WinPE로도 진입할 수
-없습니다. 복구 도구가 제공되기 전에는 Windows 설치 미디어 등 외부 부팅
-매체로 OS를 재설치하십시오.
+### `pe\config.cmd` (WinPE, client local boot)
 
-**점검 방법**
+| Variable | Default | Description |
+|---|---|---|
+| `DL_NAME` | `DVT_backup` | Top folder inside the torrent |
+| `WIM_NAME` | `backup.wim` | Image file inside that folder |
+| `FORCE_DISK` | *(empty)* | Disk number to erase; empty = detect |
+| `AUTO_DISK_FALLBACK` | `1` | Allow the RAW-volume / single-disk fallback |
+| `TDRV`, `SDRV` | `T`, `S` | Letters of the new Windows and system partitions |
+| `EFI_SIZE_MB`, `MSR_SIZE_MB`, `BIOS_SYS_SIZE_MB` | `260`, `16`, `500` | Partition sizes |
+| `NET_MASK` | `255.255.255.0` | Mask for a static IP when `ip.txt` has no subnet line |
+| `NET_DNS1`, `NET_DNS2` | `8.8.8.8`, `8.8.4.4` | DNS for a static IP |
+| `NET_TEST_HOST` | *(empty)* | Extra host that must answer (use the tracker or seeder) |
+| `SET_IP_RETRIES`, `SET_IP_RETRY_SEC` | `3`, `10` | Static IP: when no adapter reaches the gateway, all adapters are tried again this many times, after this many seconds |
+| `DHCP_WAIT_TRIES` | `30` | DHCP wait, in 2-second steps |
+| `CHECK_FILE` | `dvt_check.txt` | File used for the seeder check |
+| `SEEDER_TIMEOUT_SEC` | `60` | Seeder check timeout per attempt |
+| `SEEDER_TRIES_1G`, `SEEDER_TRIES_100` | `2`, `5` | Seeder check attempts at 1 Gbps or faster / at 100 Mbps or slower (also when the speed is unknown). `make_boot.bat` writes the link profile to `link_profile.txt` in the image |
+| `SEEDER_EXTRA_OPTS` | *(empty)* | Extra aria2c options for the seeder check |
+| `BCD_LOCALE` | `ko-kr` | Locale passed to `bcdboot` |
+| `FAIL_REBOOT_SEC`, `DONE_REBOOT_SEC` | `10`, `5` | Reboot delays |
 
-- 클라이언트: 네트워크 드라이버 추출 로그는 `C:\temp\boot\netdrv\backup.log`에 남습니다.
-  Realtek 어댑터는 PE용 드라이버가 따로 있어 추출 대상에서 제외됩니다. 
-  PE생성단계에서 자동으로 추가됩니다.
-  
-- WinPE: 화면 뒤에 최소화된 명령 창이 열려 있어 문제 확인에 사용할 수 있습니다.
+### `Media\config.cmd` (make_media.bat)
 
-## 6. 보안 권고
+| Variable | Default | Description |
+|---|---|---|
+| `MEDIA_LABEL` | `DVT` | Volume label of the ISO and the USB drive |
+| `USB_FS` | `fat32` | File system of a new USB drive: `fat32` or `exfat` |
+| `USB_PART_MB` | *(empty)* | Size of the USB partition in MB; empty = the whole disk |
+| `MEDIA_OUT_DIR` | `media_out` in the build folder | Result folder (`boot.wim`, `DVT_media.iso`) |
 
-- 이미지에 계정이나 라이선스 정보가 포함될 수 있으므로 **비공개 토렌트·사설
-  네트워크에서만** 사용하십시오.
-- `.torrent` 파일은 신뢰할 수 있는 경로로만 전달하십시오.
-- WinPE 단계에서는 **방화벽이 해제**됩니다(`wpeutil DisableFirewall`). 신뢰할 수 있는
-  네트워크에서만 실행하십시오.
-- 토렌트 전송은 암호화·서명 검증을 별도로 하지 않으므로, 이미지의 신뢰성은 토렌트 파일의
-  신뢰성에 의존합니다.
+### `Media\pe\config.cmd` (WinPE, USB / CD media)
 
-## 7. 라이선스
+It has the same variables as `pe\config.cmd` except `FORCE_DISK` and
+`AUTO_DISK_FALLBACK` (the operator chooses the disk), plus:
 
-본 프로그램은 The 3-Clause BSD License를 따릅니다. `\license\license.txt`를
-참고하십시오.
+| Variable | Default | Description |
+|---|---|---|
+| `DHCP_ENABLE` | `0` | `0` / empty = static IP (`ip.txt`) first, `1` = DHCP first |
+| `DHCP_FIRST_TRIES` | `10` | `DHCP_ENABLE=1` with `ip.txt`: 2-second tries for DHCP before the static IP |
+| `DHCP_FALLBACK_CONFIRM` | `0` | Static IP first, static IP failed but DHCP works: `0` = continue with DHCP, `1` = ask Y/N |
+| `LINK_FALLBACK` | `100` | Profile when `link.exe` is missing or fails |
+| `OCTET_MIN`, `OCTET_MAX` | `1`, `254` | Allowed last octet |
+| `MEDIA_CONFIRM` | `1` | Ask Y/N before erasing |
+| `DONE_REBOOT_SEC` | `15` | Time to remove the media |
 
-## 부록 A. 파일 구성과 스크립트 역할
+### aria2 profiles
 
-**클라이언트에서 실행 (`C:\temp\boot`)**
+`pe\aria2.conf.100` and `pe\aria2.conf.1G` (for the media:
+`Media\config\aria2.conf.*`) are ordinary aria2 configuration files. Both seed
+for up to 60 minutes after the download, disable DHT/PEX/LPD and run
+`start_restore.bat` when the download is complete. The 1 Gbps profile allows
+more peers, removes the upload limit and enables a disk cache.
 
-| 파일 | 역할 |
+## Script reference
+
+### Build PC
+
+| Script | Purpose |
 |---|---|
-| `makeboot.bat` | 전체 준비 흐름 (관리자 권한 상승, `DVT.tag`, `boot.wim` 가공, BCD 등록, 재부팅) |
-| `getip.bat` | 고정 IP이면 `C:\temp\ip.txt`에 저장, DHCP면 저장하지 않음 |
-| `getlinkspeed.bat` | 링크 속도 감지 → aria2 설정·화면 색 결정 |
-| `getnetdrv.bat` | 연결된 물리 어댑터의 드라이버를 `netdrv`로 추출 (Realtek 제외) |
-| `setbcd.bat` | WinPE 부팅 항목 추가, 다음 부팅 1회만 적용, 다음 Windows 부팅 시 항목 자동 삭제 |
-| `printip.bat` | 완료/실패 화면에 IP 마지막 자리를 크게 표시 (`ip.txt`가 없으면 오류 메시지가 보일 수 있음) |
+| `make_pe.bat` | Builds `boot\boot.wim` from the ADK `winpe.wim` (scripts, tools, drivers, Num Lock on) and copies the host scripts into `boot\` |
+| `make_test_pe.bat` | Builds the test image `boot_test\boot.wim` (network, gateway and seeder check, FTP upload of `<ip>.txt`, no disk access) |
+| `make_media.bat` | Builds `media_out\boot.wim` from the ADK `winpe.wim` with `Media\pe`, then writes the ISO, a new USB drive, or updates a USB drive (`iso`, `usb`, `update`) |
 
-**WinPE에서 실행 (`X:\restore`, `pe_files`에 포함)**
+### Client PC (Windows, client local boot)
 
-| 파일 | 역할 |
+| Script | Purpose |
 |---|---|
-| `startnet.cmd` | WinPE 시작 시 `startDVT.bat` 호출 (`system32`에 포함) |
-| `startDVT.bat` | WinPE 전체 흐름 제어 |
-| `get_disk.bat` | 대상 디스크 번호 탐색 |
-| `set_ip.bat` / `get_ip.bat` | 고정 IP 설정 / DHCP IP 확인 |
-| `check_gateway.bat` | 게이트웨이 ping 확인 |
-| `check_seeder.bat` | 시더 접속 확인 (`dvt_check.txt`) |
-| `makedisk.bat` | 디스크 초기화 및 파티션 생성 |
-| `get_target.bat` | 다운로드 드라이브 선택 |
-| `start_restore.bat` / `restore.bat` | 다운로드 완료 훅 / 이미지 복원 |
-| `aria2.conf.100`, `aria2.conf.1G` | 링크 속도별 aria2 설정 (`makeboot.bat`가 하나를 `aria2.conf`로 변경) |
-| `aria2c.exe`, `wimlib-imagex.exe`, `nircmd.exe` | 외부 프로그램 |
+| `make_boot.bat` | Main script: prepares the PC and restarts into WinPE (runs from `C:\temp\boot`) |
+| `get_host_ip.bat` | Finds the default-route adapter; writes `ip.txt` (ip, subnet, gateway) for a static address only |
+| `get_link_speed.bat` | Link speed → aria2 profile and console color |
+| `export_net_drivers.bat` | Exports drivers of connected physical NICs with `pnputil` |
+| `prepare_mount_dir.bat` | Discards a stale mount and checks the mount folder is empty |
+| `set_bcd.bat` | Creates a ramdisk boot entry for `boot.wim`, used for the next boot only |
+| `show_ip.bat` | Shows the last octet of the IP address in large digits |
 
-`get_wim.bat`는 현재 `startDVT.bat`에서 호출되지 않는 이전 버전 파일입니다.
+### WinPE (both)
 
-## 문의
+| Script | Purpose |
+|---|---|
+| `get_firmware.bat` | UEFI or BIOS |
+| `get_ip.bat` / `set_ip.bat` | DHCP / static IP |
+| `check_gateway.bat` | Pings the default gateway |
+| `check_seeder.bat` | Downloads `dvt_check.txt` only and verifies its size (rejects a 0-byte file) |
+| `make_disk.bat` | Cleans the disk and creates GPT or MBR partitions |
+| `get_target.bat` | Picks the download drive (another local volume with enough free space, otherwise `T:`; on the media never the boot media) |
+| `start_restore.bat` | Called by aria2c; starts `restore.bat` once in its own window |
+| `restore.bat` | Applies the image, drivers, boot files, `setpc.bat`, cleans up and reboots |
+| `ping_host.bat`, `wait.bat` | Helpers (`timeout.exe` is not available in WinPE) |
 
-zerojinny@gmail.com
+### WinPE, client local boot only (`pe\`)
+
+| Script | Purpose |
+|---|---|
+| `startnet.cmd` | Runs `start_dvt.bat` when WinPE starts |
+| `start_dvt.bat` | Main flow: checks, network, erase, download |
+| `get_disk.bat` | Disk to erase |
+
+### WinPE, USB / CD media only (`Media\pe\`)
+
+| Script | Purpose |
+|---|---|
+| `startnet.cmd` | Finds the boot media, copies `<media>\config` to `X:\restore`, runs `start_media.bat` |
+| `start_media.bat` | Main flow: network order, input, checks, erase, download |
+| `get_input.bat` | Disk list; last IP octet and disk number |
+| `getdiskinfo.bat` | Disk list |
+| `link.exe` | Link speed → `aria2.conf` |
+
+## Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| PC reboots into the old Windows after a few seconds | Client local boot: a check failed before erasing. The message on screen names it (disk, network, gateway or seeder). |
+| "The target disk could not be determined" | `DVT.tag` missing or on several disks. Rerun `make_boot.bat`, or set `FORCE_DISK`. |
+| "No seeder is reachable" | Tracker/seeder running? `dvt_check.txt` in the torrent? Log: `%TEMP%\dvt_seeder.log`. |
+| "The seeder check file in the torrent is empty" | `dvt_check.txt` in the torrent is a 0-byte file. Give it content and create the torrent again. |
+| No network in WinPE | The NIC driver may be missing. Check `NETDRV_EXCLUDE`, or add the driver to `drivers\` and rebuild. Realtek NICs need the WinPE driver. |
+| Connection drops during the download on a Realtek PC | The Windows Realtek driver may be in WinPE. Keep `NETDRV_EXCLUDE=Realtek` and rebuild with Realtek's WinPE driver in `drivers\`. |
+| Media: "The IP settings in ...\config\ip.txt are invalid" | Check the three-line format and save `ip.txt` as ANSI / ASCII. |
+| Media: the PC boots the media again after the restore | Remove the USB drive / CD during the countdown. Nothing is erased without input. |
+| `make_media.bat` stops before erasing a large USB drive | FAT32 over 32 GB on a build PC before build 26300. Use Rufus, `USB_PART_MB` or `USB_FS=exfat` (see [USB drive and ISO](#usb-drive-and-iso)). |
+| `make_boot.bat` says the mount folder is not empty | Run `dism /Cleanup-Mountpoints` and empty the folder. |
+| Restore failed after erasing | Read the red message. Fix the cause and run `X:\restore\restore.bat` again from the "DVT Console" window, or press a key to reboot. |
+
+A minimized "DVT Console" window is opened in WinPE for troubleshooting.
+diskpart logs are written to `%TEMP%\dvt_make_disk*.log`.
+
+## Limitations
+
+- x64 only (ADK `amd64` WinPE).
+- IPv4 only.
+- The first image (index 1) of `backup.wim` is applied.
+- The client local boot needs a working Windows on the client PC to run
+  `make_boot.bat`. Use the USB / CD media for PCs without Windows.
+
+## Third-party tools
+
+DVT does not include these tools. Download them from their official sites;
+each is distributed under its own license.
+
+- [aria2](https://github.com/aria2/aria2) — BitTorrent download
+- [wimlib](https://wimlib.net/) — applying the WIM image
+- [NirCmd](https://www.nirsoft.net/utils/nircmd.html) — stopping aria2c
+- [Windows ADK and WinPE add-on](https://learn.microsoft.com/windows-hardware/get-started/adk-install) — Microsoft
+- [Rufus](https://rufus.ie) — optional, writing the ISO to a USB drive
+
+## License
+
+DVT is released under the [BSD 3-Clause License](LICENSE).
+Copyright (c) 2026, zerojinny.
+
+The third-party tools above are not part of DVT and keep their own licenses.
+
+## Disclaimer
+
+DVT erases disks by design. Use it at your own risk, and test it on hardware
+you can afford to wipe.
