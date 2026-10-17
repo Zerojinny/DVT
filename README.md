@@ -37,6 +37,7 @@ wimlib-imagex and NirCmd.
 - [Quick start — USB / CD media](#quick-start--usb--cd-media)
 - [Test image](#test-image)
 - [Preparing the torrent](#preparing-the-torrent)
+- [qBittorrent setup (seeder and tracker)](#qbittorrent-setup-seeder-and-tracker)
 - [Choosing the disk to erase](#choosing-the-disk-to-erase)
 - [Network](#network)
 - [USB / CD media details](#usb--cd-media-details)
@@ -195,6 +196,8 @@ use only the stored copies (and `source\winpe.wim`, shared with
   local peer discovery are disabled in the aria2 profiles, so peers are found
   through the tracker only.
 - At least one **seeder** that has the complete `DVT_backup` folder.
+- qBittorrent can be both the seeder and the tracker. See
+  [qBittorrent setup](#qbittorrent-setup-seeder-and-tracker).
 
 ## Repository layout
 
@@ -204,6 +207,8 @@ dvt/
 ├─ make_test_pe.bat         build the test WinPE image (build PC)
 ├─ make_media.bat           build the USB / CD media: ISO, new USB drive,
 │                           or update a USB drive (build PC)
+├─ qbittorrent-setup.en.md  qBittorrent seeder and tracker setup manual
+├─ qbittorrent-setup.ko.md  the same manual in Korean
 ├─ host/                    Windows-side scripts (client PC)
 │  ├─ config.cmd            settings for the host scripts and make_pe.bat
 │  ├─ make_boot.bat         prepare a client PC and restart into WinPE
@@ -289,7 +294,8 @@ file in `host\`. This folder is everything a client PC needs besides the torrent
 
 ### 2. Prepare the torrent and the seeder
 
-See [Preparing the torrent](#preparing-the-torrent). Start the tracker and the seeder.
+See [Preparing the torrent](#preparing-the-torrent). Start the tracker and the seeder
+(with qBittorrent, see [qBittorrent setup](#qbittorrent-setup-seeder-and-tracker)).
 
 ### 3. Prepare each client PC
 
@@ -335,7 +341,8 @@ erased, DVT waits for a key so you can read the error.
 ## Quick start — USB / CD media
 
 1. Prepare the torrent and the seeder (see
-   [Preparing the torrent](#preparing-the-torrent)).
+   [Preparing the torrent](#preparing-the-torrent) and
+   [qBittorrent setup](#qbittorrent-setup-seeder-and-tracker)).
 2. Put the files in `Media\config`: `DVT_backup.torrent`, `aria2.conf.100`,
    `aria2.conf.1G`, and `ip.txt` for a static IP (see [Network](#network)).
 3. Review `Media\pe\config.cmd` (see [Configuration](#configuration)).
@@ -432,6 +439,26 @@ DVT_backup\
 > seeder check file in the torrent is empty"). Always put a file with content
 > (a few KB) in the folder before you create the torrent. If you change the
 > file, create the torrent again.
+
+## qBittorrent setup (seeder and tracker)
+
+One qBittorrent PC can serve the image (seeder) and broker the peer list
+(embedded tracker) at the same time. The settings differ between a 100 Mbps or
+slower network and a 1 Gbps or faster network, and each is split into required
+and recommended items.
+
+**[qBittorrent seeder and tracker setup manual](qbittorrent-setup.en.md)**
+([한국어](qbittorrent-setup.ko.md))
+
+The required items for every network:
+
+- Turn on **Enable embedded tracker** (Tools → Options → Advanced) and use
+  `http://<seeder IP>:9000/announce` as the tracker URL.
+- Set **Peer connection protocol** to **TCP**. aria2 does not support μTP.
+- Create the torrent in **V1** format with **Optimize alignment** unchecked.
+  aria2 cannot download V2 or Hybrid torrents.
+- Turn off torrent queueing and seeding limits, and open the tracker and peer
+  ports in the seeder's firewall.
 
 ## Choosing the disk to erase
 

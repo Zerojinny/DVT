@@ -36,6 +36,7 @@ WinPE 기본 도구만 사용하며(WMIC, WMI, PowerShell, findstr 사용 안 �
 - [빠른 시작 — USB / CD 미디어](#빠른-시작--usb--cd-미디어)
 - [테스트 이미지](#테스트-이미지)
 - [토렌트 준비](#토렌트-준비)
+- [qBittorrent 설정 (시더와 트래커)](#qbittorrent-설정-시더와-트래커)
 - [지울 디스크 선택](#지울-디스크-선택)
 - [네트워크](#네트워크)
 - [USB / CD 미디어 세부 사항](#usb--cd-미디어-세부-사항)
@@ -190,6 +191,8 @@ aria2 프로필, 다운로드, 복원(`restore.bat`, `setpc.bat`)을 사용합�
 - 클라이언트에서 접근 가능한 BitTorrent **트래커**. aria2 프로필에서 DHT,
   피어 교환(PEX), 로컬 피어 탐색(LPD)을 꺼 두었기 때문에 피어는 트래커로만 찾습니다.
 - 완전한 `DVT_backup` 폴더를 가진 **시더**가 최소 한 대
+- qBittorrent 하나로 시더와 트래커를 함께 맡을 수 있습니다.
+  [qBittorrent 설정](#qbittorrent-설정-시더와-트래커)을 참고하세요.
 
 ## 저장소 구성
 
@@ -199,6 +202,8 @@ dvt/
 ├─ make_test_pe.bat         테스트용 WinPE 이미지 빌드 (빌드 PC)
 ├─ make_media.bat           USB / CD 미디어 빌드: ISO, 새 USB 드라이브,
 │                           USB 드라이브 갱신 (빌드 PC)
+├─ qbittorrent-setup.ko.md  qBittorrent 시더·트래커 설정 매뉴얼
+├─ qbittorrent-setup.en.md  같은 매뉴얼의 영어판
 ├─ host/                    Windows 쪽 스크립트 (클라이언트 PC)
 │  ├─ config.cmd            host 스크립트와 make_pe.bat 설정
 │  ├─ make_boot.bat         클라이언트 PC 준비 후 WinPE로 재시작
@@ -284,7 +289,8 @@ dvt/
 
 ### 2. 토렌트와 시더 준비
 
-[토렌트 준비](#토렌트-준비)를 참고하세요. 트래커와 시더를 실행해 둡니다.
+[토렌트 준비](#토렌트-준비)를 참고하세요. 트래커와 시더를 실행해 둡니다
+(qBittorrent를 쓴다면 [qBittorrent 설정](#qbittorrent-설정-시더와-트래커) 참고).
 
 ### 3. 각 클라이언트 PC 준비
 
@@ -327,7 +333,8 @@ PC가 WinPE로 부팅해 스스로 복원합니다. 콘솔 색으로 상태를 �
 
 ## 빠른 시작 — USB / CD 미디어
 
-1. 토렌트와 시더를 준비합니다([토렌트 준비](#토렌트-준비) 참고).
+1. 토렌트와 시더를 준비합니다([토렌트 준비](#토렌트-준비),
+   [qBittorrent 설정](#qbittorrent-설정-시더와-트래커) 참고).
 2. `Media\config`에 파일을 넣습니다: `DVT_backup.torrent`, `aria2.conf.100`,
    `aria2.conf.1G`, 고정 IP를 쓸 때 `ip.txt`([네트워크](#네트워크) 참고).
 3. `Media\pe\config.cmd`를 확인합니다([설정](#설정) 참고).
@@ -420,6 +427,24 @@ DVT_backup\
 > 디스크를 지우기 전에 점검을 실패로 처리합니다("The seeder check file in the
 > torrent is empty"). 반드시 내용이 있는 파일(수 KB)을 넣고 토렌트를 만드세요.
 > 파일을 바꿨다면 토렌트도 다시 만들어야 합니다.
+
+## qBittorrent 설정 (시더와 트래커)
+
+qBittorrent PC 한 대가 이미지를 제공하는 시더와 피어 목록을 중개하는 내장 트래커를
+동시에 맡을 수 있습니다. 설정은 100Mbps 이하 네트워크와 1Gbps 이상 네트워크에서
+다르며, 각각 필수 항목과 권장 항목으로 나뉩니다.
+
+**[qBittorrent 시더·트래커 설정 매뉴얼](qbittorrent-setup.ko.md)**
+([English](qbittorrent-setup.en.md))
+
+모든 네트워크에 공통인 필수 항목:
+
+- **내장 트래커 활성화**(도구 → 옵션 → 고급)를 켜고, 트래커 URL은
+  `http://<시더 IP>:9000/announce`를 씁니다.
+- **피어 연결 프로토콜**을 **TCP**로 지정합니다. aria2는 μTP를 지원하지 않습니다.
+- 토렌트는 **토렌트 형식 V1**, **정렬 최적화** 해제로 만듭니다. aria2는 V2·혼합
+  토렌트를 받지 못합니다.
+- 토렌트 대기열과 시딩 제한을 끄고, 시더 방화벽에서 트래커·피어 포트를 엽니다.
 
 ## 지울 디스크 선택
 
