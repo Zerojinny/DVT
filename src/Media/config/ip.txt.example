@@ -1,0 +1,14 @@
+# DVT media - static IP settings
+# Rename this file to ip.txt. When ip.txt exists, WinPE tries this
+# static IP first; if its gateway test fails, it tries DHCP and asks
+# whether to continue. Without ip.txt, DHCP is used.
+#
+# One value per line, in this order:
+#   line 1 = ip      : only the first three octets are used; the last
+#                      octet is entered on each PC with the disk number
+#   line 2 = subnet  : may be omitted (NET_MASK in Media\pe\config.cmd)
+#   line 3 = gateway : may be omitted (first three octets of ip + .1)
+# Lines starting with # are ignored. Save the file as ANSI / ASCII.
+203.244.132.0
+255.255.255.0
+203.244.132.1
