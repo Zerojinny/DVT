@@ -41,7 +41,8 @@ instead; the operator types the IP address and the disk at each PC.
   gateway, a real seeder download and the disk space. On failure the PC goes
   back to its old Windows.
 - **Finds the right disk** by the disk ID read in Windows (works with
-  BitLocker), then by a marker file; anything ambiguous stops.
+  BitLocker); a RAW-volume fallback covers PCs with instant recovery
+  software. Anything ambiguous stops.
 - **UEFI and BIOS**, **static IP (with DNS) or DHCP**, network drivers taken
   from the running PC, separate aria2 profiles for 100 Mbps and 1 Gbps.
 - **Test image** that checks network and seeder on every PC and uploads a
