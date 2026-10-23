@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DVT - wpe_nonet.xml (WinPE, shared, X:\restore)
+  Answer file for wpeinit, used by start_dvt.bat, start_media.bat and
+  start_test.bat:  wpeinit -unattend="X:\restore\wpe_nonet.xml"
+  EnableNetwork=false: wpeinit skips the network initialization, so it
+  does not wait for a DHCP lease (slow on a static IP network).
+  The scripts then run "wpeutil InitializeNetwork /NoWait".
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <EnableNetwork>false</EnableNetwork>
+    </component>
+  </settings>
+</unattend>
