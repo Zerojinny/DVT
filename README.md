@@ -23,7 +23,7 @@ wimlib-imagex and NirCmd.
 ## How it works
 
 ```
-Build PC      01_make_pe.bat  →  _output\boot\ (boot.wim + client scripts)
+Build PC      DVT_GUI.exe (or data\01_make_pe.bat)  →  _output\boot\ (boot.wim + client scripts)
 Client PC     C:\temp\boot\make_boot.bat  →  one-time restart into WinPE
 WinPE         checks disk, network, gateway, seeder and disk space
               → erases the disk → downloads by torrent → applies the image
@@ -32,6 +32,23 @@ WinPE         checks disk, network, gateway, seeder and disk space
 
 PCs without a working Windows can boot a **USB / CD** made by `02_make_media.bat`
 instead; the operator types the IP address and the disk at each PC.
+
+## DVT GUI
+
+On the build PC, **DVT GUI** (`DVT_GUI.exe`) does everything in one window:
+edit every setting with its description, install the Windows ADK + WinPE
+add-on (choose the version), download aria2, wimlib and NirCmd, and build the
+client local boot image, the USB / CD media and the test image. Build it once
+with `gui_cs\build_gui.bat` (uses the C# compiler of Windows, nothing to
+install). English and Korean; more languages are a text file in `lang\`.
+
+![DVT GUI](doc/images/gui_local.en.png)
+
+The GUI only edits the settings files in `data\` and starts the batch files
+there, so everything still works without it: run `data\01_make_pe.bat`,
+`data\02_make_media.bat` or `data\03_make_test_pe.bat` and edit the
+`config.cmd` files in Notepad. See [DVT GUI](doc/manual.md#dvt-gui-build-pc)
+in the manual.
 
 ## Highlights
 
@@ -83,20 +100,25 @@ Things to keep in mind:
 
 ## Quick start
 
-1. **Build PC:** install the Windows ADK + WinPE add-on, put `aria2c.exe`,
-   `wimlib-imagex.exe` (+ DLL) in `pe_tools\` and `nircmd.exe` in
-   `nircmd-x64\`, then run `01_make_pe.bat`.
+1. **Build PC:** run `gui_cs\build_gui.bat` once and start `DVT_GUI.exe`.
+   On *Prerequisites*, install the Windows ADK + WinPE add-on and download the
+   WinPE tools; on *Client local boot*, check the settings and press
+   **Build image**.
+   Without the GUI: install the ADK and the add-on from Microsoft, put
+   `aria2c.exe`, `wimlib-imagex.exe` (+ DLL) and `nircmd.exe` (x64) in
+   `pe_tools\`, then run `data\01_make_pe.bat`.
 2. **Seeder:** put `backup.wim` and a non-empty `dvt_check.txt` in a
    `DVT_backup` folder, create `DVT_backup.torrent` (V1) and seed it with
    qBittorrent's embedded tracker.
-3. **Clients:** copy `_output\boot` to `C:\temp\boot` and the torrent to
+3. **Clients:** copy `_output\boot` (GUI: **Copy client package...**) to `C:\temp\boot` and the torrent to
    `C:\temp`, then run `C:\temp\boot\make_boot.bat` — by hand or with Veyon.
 
 Details, settings and troubleshooting: [doc/manual.md](doc/manual.md).
 
 ## Requirements
 
-- Build PC: Windows 10/11 x64, Windows ADK with the WinPE add-on
+- Build PC: Windows 10/11 x64, Windows ADK with the WinPE add-on (DVT GUI
+  installs it); DVT GUI needs only the .NET Framework 4.x of Windows
 - Clients: x64 PCs, UEFI or BIOS, wired network
 - A BitTorrent tracker and at least one seeder (qBittorrent can be both; the
   setup manual is written for the qBittorrent 5.3.0 standard installer,

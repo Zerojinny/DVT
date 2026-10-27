@@ -22,7 +22,7 @@ NirCmd만 사용합니다.
 ## 동작 방식
 
 ```
-빌드 PC       01_make_pe.bat  →  _output\boot\ (boot.wim + 클라이언트 스크립트)
+빌드 PC       DVT_GUI.exe (또는 data\01_make_pe.bat)  →  _output\boot\ (boot.wim + 클라이언트 스크립트)
 클라이언트    C:\temp\boot\make_boot.bat  →  1회용 부팅 항목으로 WinPE 재시작
 WinPE         디스크, 네트워크, 게이트웨이, 시더, 디스크 공간 확인
               → 디스크 삭제 → 토렌트 다운로드 → 이미지 적용
@@ -31,6 +31,22 @@ WinPE         디스크, 네트워크, 게이트웨이, 시더, 디스크 공간
 
 Windows가 동작하지 않는 PC는 `02_make_media.bat`으로 만든 **USB / CD**로 부팅할 수
 있습니다. 이때는 작업자가 PC마다 IP 주소와 디스크를 입력합니다.
+
+## DVT GUI
+
+빌드 PC에서는 **DVT GUI**(`DVT_GUI.exe`) 창 하나로 모든 작업을 합니다. 모든 설정을
+설명과 함께 편집하고, Windows ADK와 WinPE 추가 기능을 버전을 골라 설치하고,
+aria2·wimlib·NirCmd를 내려받고, 클라이언트 로컬부팅 이미지·USB / CD 미디어·테스트
+이미지를 빌드합니다. `gui_cs\build_gui.bat`으로 한 번 빌드하면 됩니다(Windows에 있는
+C# 컴파일러 사용, 설치할 것 없음). 한국어와 영어를 지원하며, 다른 언어는 `lang\`의
+텍스트 파일 하나로 추가합니다.
+
+![DVT GUI](doc/images/gui_local.ko.png)
+
+GUI는 `data\`의 설정 파일을 고치고 그곳의 배치 파일을 실행할 뿐이므로 GUI 없이도
+모두 동작합니다. `data\01_make_pe.bat`, `data\02_make_media.bat`,
+`data\03_make_test_pe.bat`을 실행하고 `config.cmd` 파일은 메모장으로 고치면 됩니다.
+매뉴얼의 [DVT GUI](doc/manual.ko.md#dvt-gui-빌드-pc)를 참고하세요.
 
 ## 주요 특징
 
@@ -80,19 +96,23 @@ PC마다 직접 하는 것이 배포에서 가장 시간이 많이 드는 부분
 
 ## 빠른 시작
 
-1. **빌드 PC:** Windows ADK와 WinPE 추가 기능을 설치하고, `aria2c.exe`,
-   `wimlib-imagex.exe`(+ DLL)를 `pe_tools\`에, `nircmd.exe`를 `nircmd-x64\`에 넣은 뒤
-   `01_make_pe.bat`을 실행합니다.
+1. **빌드 PC:** `gui_cs\build_gui.bat`을 한 번 실행하고 `DVT_GUI.exe`를 시작합니다.
+   *필수 구성 요소*에서 Windows ADK와 WinPE 추가 기능을 설치하고 WinPE 도구를
+   내려받은 뒤, *클라이언트 로컬부팅*에서 설정을 확인하고 **이미지 빌드**를 누릅니다.
+   GUI 없이: Microsoft에서 ADK와 추가 기능을 설치하고, `aria2c.exe`,
+   `wimlib-imagex.exe`(+ DLL), `nircmd.exe`(x64)를 `pe_tools\`에 넣은 뒤
+   `data\01_make_pe.bat`을 실행합니다.
 2. **시더:** `DVT_backup` 폴더에 `backup.wim`과 내용이 있는 `dvt_check.txt`를 넣고
    `DVT_backup.torrent`(V1)를 만든 뒤 qBittorrent 내장 트래커로 시딩합니다.
-3. **클라이언트:** `_output\boot`를 `C:\temp\boot`로, 토렌트를 `C:\temp`로 복사하고
+3. **클라이언트:** `_output\boot`(GUI: **클라이언트 패키지 복사...**)를 `C:\temp\boot`로, 토렌트를 `C:\temp`로 복사하고
    `C:\temp\boot\make_boot.bat`을 실행합니다 — 직접 또는 Veyon으로.
 
 자세한 내용, 설정, 문제 해결: [doc/manual.ko.md](doc/manual.ko.md)
 
 ## 요구 사항
 
-- 빌드 PC: Windows 10/11 x64, Windows ADK와 WinPE 추가 기능
+- 빌드 PC: Windows 10/11 x64, Windows ADK와 WinPE 추가 기능(DVT GUI가 설치),
+  DVT GUI는 Windows의 .NET Framework 4.x만 있으면 됨
 - 클라이언트: x64 PC, UEFI 또는 BIOS, 유선 네트워크
 - BitTorrent 트래커와 시더 최소 한 대(qBittorrent 하나로 둘 다 가능, 설정 매뉴얼은
   qBittorrent 5.3.0 일반 설치 파일(libtorrent 2.1) 기준)
