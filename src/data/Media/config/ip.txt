@@ -1,9 +1,0 @@
-# DVT media - static IP settings (saved by DVT_GUI)
-# One value per line: line 1 = ip (only the first three octets are
-# used), line 2 = subnet, line 3 = gateway, lines 4-5 = DNS servers.
-# Lines starting with # are ignored. Save the file as ANSI / ASCII.
-192.168.0.125
-255.255.255.0
-192.168.0.1
-203.244.128.51
-203.244.128.52
