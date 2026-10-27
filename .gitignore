@@ -1,21 +1,22 @@
 # ============================================================
 #  DVT - files that must never be committed or released
+#  (**/ matches the folders at any depth, e.g. src/data/...)
 # ============================================================
 
 # USB / CD media: site-specific files (put them in with the GUI)
-data/Media/config/ip.txt
-data/Media/config/DVT_backup.torrent
+**/data/Media/config/ip.txt
+**/data/Media/config/DVT_backup.torrent
 
 # any other torrent file
 *.torrent
 
 # DVT GUI: language choice of this PC
-data/gui_settings.ini
+**/data/gui_settings.ini
 
 # build results, ADK copies and logs
-_output/
-source/
+**/_output/
+**/source/
 
 # third-party tools (downloaded by the GUI, not part of DVT)
-pe_tools/
-system32/
+**/pe_tools/
+**/system32/
