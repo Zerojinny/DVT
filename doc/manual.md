@@ -16,6 +16,10 @@ A client PC can start DVT in two ways:
 - **USB / CD media** — `02_make_media.bat` makes a boot USB drive or ISO. Use it
   for PCs that cannot start Windows or have no Windows installed. The operator enters the IP address and the disk at each PC.
 
+On the build PC, **DVT GUI** (`DVT_GUI.exe`) edits the settings, installs the
+Windows ADK and the WinPE tools and starts the builds. Every step can also be
+done by running the batch files in `data\` directly.
+
 Everything is plain Windows batch. The scripts that run inside WinPE use only
 tools that WinPE ships with (no WMIC, WMI, PowerShell or findstr), plus aria2c,
 wimlib-imagex and NirCmd.
@@ -33,6 +37,7 @@ wimlib-imagex and NirCmd.
 - [Features](#features)
 - [Requirements](#requirements)
 - [Repository layout](#repository-layout)
+- [DVT GUI (build PC)](#dvt-gui-build-pc)
 - [Quick start — client local boot](#quick-start--client-local-boot)
 - [Quick start — USB / CD media](#quick-start--usb--cd-media)
 - [Test image](#test-image)
@@ -58,16 +63,16 @@ wimlib-imagex and NirCmd.
 |---|---|---|
 | Build PC | `01_make_pe.bat` → `_output\boot\` folder | `02_make_media.bat` → ISO or USB drive |
 | Client PC, before WinPE | `C:\temp\boot\make_boot.bat` in Windows (once per PC) | nothing — boot from the media |
-| WinPE main script | `bats\pe\start_dvt.bat` | `bats\Media\pe\start_media.bat` |
+| WinPE main script | `data\pe\start_dvt.bat` | `data\Media\pe\start_media.bat` |
 | IP address | detected in Windows (static IP → `ip.txt`) | static IP from `ip.txt` (operator types the last octet) or DHCP, order by `DHCP_ENABLE` |
 | Disk to erase | detected (disk ID, then the RAW-volume fallback) | typed by the operator |
 | Failure before erasing | reboots into the old Windows | waits for a key, then reboots |
-| WinPE settings | `bats\pe\config.cmd` (inside `boot.wim`) | `bats\Media\pe\config.cmd` (also on the media, editable on a USB drive) |
+| WinPE settings | `data\pe\config.cmd` (inside `boot.wim`) | `data\Media\pe\config.cmd` (also on the media, editable on a USB drive) |
 
 Both ways check the gateway, the seeder and the disk space **before** anything
 is erased, and both use the same torrent, aria2 profiles, download and restore
 (`restore.bat`, `setpc.bat`). The WinPE scripts that both use are kept once,
-in `bats\common`.
+in `data\common`.
 
 ### Client local boot
 
@@ -114,9 +119,9 @@ in `bats\common`.
 [1] Build PC ── 02_make_media.bat
       source\winpe.wim (clean ADK copy)
       + pe_tools, drivers, nircmd
-      + bats\Media\pe and bats\common  (only these scripts)
+      + data\Media\pe and data\common  (only these scripts)
       → _output\media\boot.wim
-      + source\adk_media, bats\Media\config, bats\Media\pe\config.cmd
+      + source\adk_media, data\Media\config, data\Media\pe\config.cmd
       → ISO (oscdimg) or USB drive
          │
          │  boot from the USB drive / CD
@@ -145,9 +150,9 @@ in `bats\common`.
     reboot (remove the USB drive / CD)
 ```
 
-The media image does **not** use `_output\boot\boot.wim` or the `bats\pe` folder:
+The media image does **not** use `_output\boot\boot.wim` or the `data\pe` folder:
 `X:\restore` contains only the tools of `pe_tools` and the files of
-`bats\Media\pe` and `bats\common`.
+`data\Media\pe` and `data\common`.
 
 ## Features
 
@@ -187,12 +192,15 @@ The media image does **not** use `_output\boot\boot.wim` or the `bats\pe` folder
 **Build PC**
 
 - Windows 10/11 x64, administrator rights
+- DVT GUI: the .NET Framework 4.x of Windows 10/11 (nothing to install)
 - [Windows ADK](https://learn.microsoft.com/windows-hardware/get-started/adk-install)
   and the **Windows PE add-on** (amd64). The USB / CD media also needs the
   **Deployment Tools** of the ADK, on the first run only (see below).
+  DVT GUI installs both (*Prerequisites* page).
 - `aria2c.exe` and `wimlib-imagex.exe` (with its DLL), placed in `pe_tools\` or `system32\`
-- `nircmd.exe` (x64), placed in `nircmd-x64\`
-- USB / CD media only: a 64-bit `link.exe` in `bats\Media\pe`. It is used as it is
+- `nircmd.exe` (x64), placed in `pe_tools\` (`NIRCMD_SRC`)
+- DVT GUI downloads aria2, wimlib and NirCmd into `pe_tools\` (*Prerequisites* page).
+- USB / CD media only: a 64-bit `link.exe` in `data\Media\pe`. It is used as it is
   (nothing is compiled); `02_make_media.bat` stops when it is missing.
 
 `02_make_media.bat` stores the ADK `Media` folder in `source\adk_media`, and
@@ -219,17 +227,21 @@ use only the stored copies (and `source\winpe.wim`, shared with
 
 ```
 dvt/
-├─ 01_make_pe.bat           build the WinPE image (build PC)
-├─ 03_make_test_pe.bat      build the test WinPE image (build PC)
-├─ 02_make_media.bat        build the USB / CD media: ISO, new USB drive,
-│                           or update a USB drive (build PC)
+├─ DVT_GUI.exe              DVT GUI (optional)
+├─ lang/                    language files of DVT GUI (en.ini, ko.ini)
 ├─ qbittorrent-setup.en.md  qBittorrent seeder and tracker setup manual
 ├─ qbittorrent-setup.ko.md  the same manual in Korean
 ├─ doc/                     manual.md / manual.ko.md (README + qBittorrent
 │  │                        manual in one file) and their PDFs
+│  ├─ images/               screenshots of DVT GUI (*.en.png, *.ko.png)
 │  └─ qbittorrent.ini/      qBittorrent settings files: qbittorrent.ini.1G,
 │                           qbittorrent.ini.100
-├─ bats/                    all scripts
+├─ data/                    all scripts and their settings
+│  ├─ 01_make_pe.bat           build the WinPE image (build PC)
+│  ├─ 03_make_test_pe.bat      build the test WinPE image (build PC)
+│  ├─ 02_make_media.bat        build the USB / CD media: ISO, new USB drive,
+│  │                           or update a USB drive (build PC)
+│  ├─ adk.ini                  ADK releases for the GUI (links, hashes)
 │  ├─ common/                  WinPE scripts shared by the client local boot,
 │  │  │                        the test image and the USB / CD media
 │  │  │                        (copied to X:\restore after pe/ or Media/pe/)
@@ -282,10 +294,9 @@ dvt/
 │     └─ upload_ftp.bat        FTP upload (curl.exe or ftp.exe)
 │
 │  ── not in the repository, provided by you ──
-├─ pe_tools/                aria2c.exe, wimlib-imagex.exe, DLLs -> X:\restore
+├─ pe_tools/                aria2c.exe, wimlib-imagex.exe, DLLs, nircmd.exe -> X:\restore
 ├─ system32/                optional files -> X:\Windows\System32
 ├─ drivers/                 optional drivers added to every WinPE image
-├─ nircmd-x64/nircmd.exe
 │
 │  ── created by the build scripts ──
 ├─ source/                  stored copies of ADK files (first run only)
@@ -301,20 +312,140 @@ dvt/
    └─ media/                02_make_media.bat: boot.wim of the media, DVT_media.iso
 ```
 
+## DVT GUI (build PC)
+
+Everything on the build PC can be done in **DVT GUI** (`DVT_GUI.exe`): edit
+the settings, install the prerequisites and start the builds. The GUI only
+edits the settings files in `data\` and starts the batch files of `data\`, so
+every step can also be done without it — run the batch file and edit the
+`config.cmd` files in Notepad (see [Without the GUI](#without-the-gui)).
+
+### Start
+
+1. Keep `DVT_GUI.exe` in the build folder (the folder that contains `data\`).
+   It needs only the .NET Framework 4.x that comes with Windows 10/11.
+2. Double-click `DVT_GUI.exe`. It needs no administrator rights: each build
+   asks for elevation in its own console window, and the questions of the
+   script (rebuild Y/N, USB disk number, `YES`, drive letter) are answered
+   there.
+
+### Pages
+
+The sidebar on the left switches between four pages. Each page has its own
+color; a dot in the sidebar and `●` on a tab mark unsaved changes.
+
+| Page | Starts | Settings edited |
+|---|---|---|
+| **Client local boot** | `data\01_make_pe.bat` | `data\host\config.cmd`, `data\pe\config.cmd`, aria2 profiles |
+| **USB / CD media** | `data\02_make_media.bat iso` / `usb` / `update` | `data\Media\pe\config.cmd`, `ip.txt`, torrent, aria2 profiles, `data\Media\config.cmd` |
+| **Test boot** | `data\03_make_test_pe.bat` | `data\test\test_config.cmd` |
+| **Prerequisites** | Windows ADK setup, tool downloads | — |
+
+![Client local boot page](images/gui_local.en.png)
+
+- **Settings grid:** every setting has a short description; select a row to
+  see the full help below the grid (what it does, the choices, the comment of
+  the file). Settings with fixed choices get a drop-down list. Settings that
+  are usually left as they are (paths, tool locations, colors) are hidden
+  until **Show advanced** is checked.
+- **Save** writes only the changed `set "NAME=VALUE"` lines and keeps the
+  comments; the old file is copied to `_output\gui_backup\` first. **Reload**
+  reads the file again; **Open in Notepad** edits it by hand.
+- **Build image** starts `01_make_pe.bat` (you are asked first whether to save
+  unsaved changes). The line under the buttons shows whether `boot.wim` is built.
+- **Copy client package...** copies `_output\boot` to a folder you choose
+  (e.g. a USB stick or a share), ready to be copied to `C:\temp\boot`.
+
+![USB / CD media page](images/gui_media.en.png)
+
+- Choose **ISO file for a CD / DVD**, **New USB drive (ERASED)** or
+  **Update an existing DVT USB drive (no format)** and press **Make media**.
+- **Media settings in:** the build folder (`data\Media`, used for new media),
+  or an existing DVT USB drive. With a USB drive selected, the WinPE settings,
+  `ip.txt` and the torrent are read from and written to `<USB>:\config` — used
+  at the next boot without a rebuild.
+- Tabs: **WinPE settings**, **Static IP (ip.txt)** (one PC per line, checked
+  before saving), **Torrent and aria2**, **Media build**.
+
+![Test boot page](images/gui_test.en.png)
+
+- Set the FTP server (`FTP_HOST`, `FTP_USER`, `FTP_PASS`, ...) and press
+  **Build test image**. The network and seeder checks use the settings of
+  `data\pe\config.cmd` (page *Client local boot*).
+
+### Prerequisites
+
+![Prerequisites - Windows ADK](images/gui_adk.en.png)
+
+**Windows ADK** installs only what DVT needs — the **Deployment Tools** of
+the Windows ADK and the **Windows PE add-on** — and shows what is installed.
+
+- **Version to install:** the ADK releases of `data\adk.ini`, from Windows 10
+  1809 (10.1.17763.7320) to the newest (default). The installed version is
+  marked. When another version is installed, *Uninstall the installed ADK and
+  WinPE add-on first* is checked (the ADK setup cannot replace another
+  version: error 2008).
+- **Download and install:** `adksetup.exe` and `adkwinpesetup.exe` of the
+  selected release are downloaded from Microsoft, must carry a valid
+  Microsoft signature and the SHA256 of that release, and are run silently
+  with one administrator prompt. The setups download a few GB; installing
+  takes 10–30 minutes. Logs: `_output\adk_setup\`.
+- **Create offline package...** / **Install from offline package...** for a
+  build PC without internet.
+- New releases: add a `[release <version>]` section (links and hashes) to
+  `data\adk.ini`; it is used at the next start of the GUI.
+
+![Prerequisites - WinPE tools](images/gui_tools.en.png)
+
+**WinPE tools** downloads aria2, wimlib and NirCmd (x64) from their official
+sites, checks the SHA256 of each zip against the known hashes and copies the
+files to `pe_tools\` (`PE_TOOLS_DIR`). Replaced files are backed up to
+`_output\tools_backup\`.
+
+### Language
+
+All text of the GUI is in `lang\en.ini` and `lang\ko.ini`. Choose the
+language at the bottom of the sidebar (the choice is kept in
+`data\gui_settings.ini`). A language file is searched in
+`lang\` next to `DVT_GUI.exe` first, then the copy built into the exe, so
+the text can be changed by editing the file. A new language is a copy of
+`en.ini` with the text translated; it appears in the list at the next start.
+
+### Without the GUI
+
+| In the GUI | Without the GUI |
+|---|---|
+| Edit settings, **Save** | Edit the `config.cmd` files of `data\` in Notepad |
+| **Build image** | Run `data\01_make_pe.bat` |
+| **Make media** | Run `data\02_make_media.bat` (menu), or `02_make_media.bat iso` / `usb` / `update` |
+| **Build test image** | Run `data\03_make_test_pe.bat` |
+| **Copy client package...** | Copy `_output\boot` (or `_output\boot_test`) by hand |
+| **Windows ADK** | Install the ADK (Deployment Tools) and the WinPE add-on from the [Microsoft page](https://learn.microsoft.com/windows-hardware/get-started/adk-install) |
+| **WinPE tools** | Download the tools and put the files in `pe_tools\` |
+
+The batch files ask for administrator rights themselves.
+
 ## Quick start — client local boot
 
 ### 1. Build the WinPE image (build PC)
 
-1. Install the Windows ADK and the WinPE add-on.
-2. Put `aria2c.exe`, `wimlib-imagex.exe` and its DLL in `pe_tools\`,
-   and `nircmd.exe` in `nircmd-x64\`.
-3. Optionally add drivers to `drivers\` (e.g. storage drivers for new hardware,
+1. Start `DVT_GUI.exe` (see [DVT GUI](#dvt-gui-build-pc)).
+2. *Prerequisites* → **Windows ADK**: choose the version and press
+   **Download and install**. Without the GUI: install the Windows ADK
+   (Deployment Tools) and the WinPE add-on from Microsoft.
+3. *Prerequisites* → **WinPE tools**: press **Download missing tools**.
+   Without the GUI: put `aria2c.exe`, `wimlib-imagex.exe` and its DLL, and
+   `nircmd.exe` (x64) in `pe_tools\`.
+4. Optionally add drivers to `drivers\` (e.g. storage drivers for new hardware,
    or the WinPE driver for [Realtek NICs](#realtek-nics)).
-4. Review `bats\pe\config.cmd` (see [Configuration](#configuration)).
-5. Run `01_make_pe.bat`. It asks for elevation if needed.
+5. *Client local boot*: review the settings on the two tabs (they are
+   `data\host\config.cmd` and `data\pe\config.cmd`, see
+   [Configuration](#configuration)) and press **Save**.
+6. Press **Build image**. Without the GUI: run `data\01_make_pe.bat`. It asks
+   for elevation if needed.
 
 The result is the `_output\boot\` folder: `boot.wim`, `boot.sdi`, a copy of every
-file in `bats\host\` and `version.cmd`. This folder is everything a client PC needs besides the torrent.
+file in `data\host\` and `version.cmd`. This folder is everything a client PC needs besides the torrent.
 
 > The mount and work folders are on the local system drive
 > (`C:\WinPE_LocalBuild`). Do not move them into a folder synced by OneDrive,
@@ -328,7 +459,8 @@ See [Preparing the torrent](#preparing-the-torrent). Start the tracker and the s
 ### 3. Prepare each client PC
 
 Copy the `_output\boot\` folder from the build PC to `C:\temp\boot`, and the torrent
-to `C:\temp`:
+to `C:\temp` (**Copy client package...** in the GUI copies `_output\boot` to a USB
+stick or a share first):
 
 ```
 C:\temp\
@@ -373,13 +505,17 @@ erased, DVT waits for a key so you can read the error.
 1. Prepare the torrent and the seeder (see
    [Preparing the torrent](#preparing-the-torrent) and
    [qBittorrent setup](#qbittorrent-setup-seeder-and-tracker)).
-2. Put the files in `bats\Media\config`: `DVT_backup.torrent`, `aria2.conf.100`,
-   `aria2.conf.1G`, and `ip.txt` for a static IP (see [Network](#network)).
-3. Review `bats\Media\pe\config.cmd` (see [Configuration](#configuration)).
-4. Run `02_make_media.bat` in the build folder as administrator and choose:
+2. In DVT GUI, open *USB / CD media*. On the tabs **Torrent and aria2** and
+   **Static IP (ip.txt)**, select the torrent and enter the static IPs (see
+   [Network](#network)). Without the GUI: put `DVT_backup.torrent`,
+   `aria2.conf.100`, `aria2.conf.1G` and `ip.txt` in `data\Media\config`.
+3. Review the **WinPE settings** tab (`data\Media\pe\config.cmd`, see
+   [Configuration](#configuration)) and save.
+4. Choose ISO, new USB drive or update and press **Make media** — or run
+   `data\02_make_media.bat` as administrator and choose:
    - `1` ISO → `_output\media\DVT_media.iso`, burn it to a CD / DVD
    - `2` USB → the selected **USB** disk is erased and made bootable
-     (FAT32 on the whole disk; `USB_FS` and `USB_PART_MB` in `bats\Media\config.cmd`)
+     (FAT32 on the whole disk; `USB_FS` and `USB_PART_MB` in `data\Media\config.cmd`)
    - `3` update → copies new files to an existing DVT USB drive
 
    `02_make_media.bat iso`, `02_make_media.bat usb` and `02_make_media.bat update` skip
@@ -419,10 +555,12 @@ The erase and restore scripts (`make_disk.bat`, `restore.bat`,
 
 Steps:
 
-1. Set the FTP server in `bats\test\test_config.cmd`:
+1. Set the FTP server on the *Test boot* page of DVT GUI (or in
+   `data\test\test_config.cmd`):
    `FTP_HOST`, `FTP_PORT`, `FTP_USER`, `FTP_PASS` and, optionally, `FTP_DIR`
    (relative to the login folder). Do not use `!` or `"` in these values.
-2. Run `03_make_test_pe.bat` on the build PC. The result is the `_output\boot_test\` folder.
+2. Press **Build test image**, or run `data\03_make_test_pe.bat` on the build
+   PC. The result is the `_output\boot_test\` folder.
 3. On the client, copy `_output\boot_test\` to `C:\temp\boot_test`, put the torrent in
    `C:\temp` and run `C:\temp\boot_test\make_boot.bat`. `C:\temp\boot` and
    `C:\temp\boot_test` can be on the client at the same time: `make_boot.bat` always
@@ -488,13 +626,13 @@ DVT_backup\
 - Create `dvt_check.txt` **before** creating the torrent. WinPE downloads only
   this file to prove that a seeder is reachable before it erases anything.
 - Put the tracker URL in the torrent. Alternatively set
-  `SEEDER_EXTRA_OPTS=--bt-tracker=http://...` in `bats\pe\config.cmd` or
-  `bats\Media\pe\config.cmd` (this is used for the seeder check only; the main
+  `SEEDER_EXTRA_OPTS=--bt-tracker=http://...` in `data\pe\config.cmd` or
+  `data\Media\pe\config.cmd` (this is used for the seeder check only; the main
   download reads the torrent and `aria2.conf`).
 - Save the torrent as `DVT_backup.torrent`: in `C:\temp` of each client for the
-  client local boot, in `bats\Media\config` for the media.
-- `backup.wim` may hold several images. `WIM_INDEX` in `bats\pe\config.cmd`
-  and `bats\Media\pe\config.cmd` selects the one to apply (default `1`). List
+  client local boot, in `data\Media\config` for the media.
+- `backup.wim` may hold several images. `WIM_INDEX` in `data\pe\config.cmd`
+  and `data\Media\pe\config.cmd` selects the one to apply (default `1`). List
   them with `wimlib-imagex info backup.wim`. A wrong index stops the restore
   with a message before the image is applied.
 - When the client uses a static IP, `ip.txt` (ip, subnet, gateway, and the DNS
@@ -762,7 +900,7 @@ check Torrent format; with the lt12 build check Optimize alignment instead.
 
 `get_disk.bat` decides which disk is erased, in this order:
 
-1. **`FORCE_DISK`** in `bats\pe\config.cmd`, if set.
+1. **`FORCE_DISK`** in `data\pe\config.cmd`, if set.
 2. The disk whose **disk ID** matches `target_disk.txt` in the image.
    `make_boot.bat` reads the ID of the disk that holds the running Windows
    (the GPT disk GUID, or the MBR signature) and writes it into `boot.wim`;
@@ -785,7 +923,7 @@ or more than one disk is treated as an error, so DVT never guesses. Set
 
 > [!NOTE]
 > The disk ID is compared with the English output of `diskpart`. Keep
-> `PE_LANG=en-us` (the default) in `bats\host\config.cmd`; with another WinPE
+> `PE_LANG=en-us` (the default) in `data\host\config.cmd`; with another WinPE
 > language the disk ID is not found and only the fallback (step 3) is left.
 
 ### BitLocker
@@ -795,7 +933,7 @@ protection for **one restart** (`manage-bde -protectors -disable C:
 -RebootCount 1`). If a check fails in WinPE and the PC returns to Windows, it
 starts without asking for the recovery key, and Windows turns the protection
 back on by itself. When the restore runs, the disk is erased anyway.
-`BITLOCKER_SUSPEND=0` in `bats\host\config.cmd` leaves BitLocker as it is.
+`BITLOCKER_SUSPEND=0` in `data\host\config.cmd` leaves BitLocker as it is.
 
 The disk ID (step 2 above) can be read on a BitLocker drive, so the disk is
 found whether the drive is encrypted or not.
@@ -807,7 +945,7 @@ types the disk number (`R` scans the disks again). The disk must exist, and
 the disk of the boot media cannot be selected. With `MEDIA_CONFIRM=1`
 (default) the operator confirms with `Y` before the disk is erased.
 
-With **`FORCE_DISK`** set in `bats\Media\pe\config.cmd` (or in
+With **`FORCE_DISK`** set in `data\Media\pe\config.cmd` (or in
 `<media>\config\config.cmd`), that disk is erased and the operator does not
 choose it: with a static IP only the last octet is entered (e.g. `150`), with
 DHCP nothing is entered. With `MEDIA_CONFIRM=0` as well, a DHCP boot runs
@@ -838,11 +976,11 @@ confirmation does the same.
   and returns the others to DHCP.
 - **Link speed**: `make_boot.bat` measures it. Links of 1 Gbps or faster get
   `aria2.conf.1G`; everything else gets `aria2.conf.100`. The console color on
-  the client shows which one was chosen (`COLOR_LINK_*` in `bats\host\config.cmd`).
+  the client shows which one was chosen (`COLOR_LINK_*` in `data\host\config.cmd`).
 
 ### USB / CD media
 
-The order is set by `DHCP_ENABLE` in `bats\Media\pe\config.cmd`.
+The order is set by `DHCP_ENABLE` in `data\Media\pe\config.cmd`.
 
 | `DHCP_ENABLE` | `ip.txt` | What happens |
 |---|---|---|
@@ -853,7 +991,7 @@ The order is set by `DHCP_ENABLE` in `bats\Media\pe\config.cmd`.
 When no way works, WinPE stops before anything is erased and waits for a key
 to reboot.
 
-`ip.txt` in `bats\Media\config` has the same format as above, but line 1 is a
+`ip.txt` in `data\Media\config` has the same format as above, but line 1 is a
 base address: only its first three octets are used (`ipr`), and the operator
 types the last one.
 
@@ -900,12 +1038,12 @@ support.
 
 ### config folder
 
-`02_make_media.bat` copies these files from `bats\Media\config` to `<media>\config`,
-plus `bats\Media\pe\config.cmd`. When WinPE starts, `startnet.cmd` copies
+`02_make_media.bat` copies these files from `data\Media\config` to `<media>\config`,
+plus `data\Media\pe\config.cmd`. When WinPE starts, `startnet.cmd` copies
 `<media>\config` to `X:\restore`, so on a USB drive you can change them
 without rebuilding. `<media>\config\config.cmd` replaces the `config.cmd`
 inside `boot.wim`, so its settings (`DHCP_ENABLE`, `MEDIA_CONFIRM`, ...) apply
-at the next boot. On a CD, change `bats\Media\config` or `bats\Media\pe\config.cmd` and
+at the next boot. On a CD, change `data\Media\config` or `data\Media\pe\config.cmd` and
 rebuild.
 
 | File | Purpose |
@@ -913,9 +1051,9 @@ rebuild.
 | `DVT_backup.torrent` | required; its `dvt_check.txt` must not be empty (see [Preparing the torrent](#preparing-the-torrent)) |
 | `aria2.conf.1G`, `aria2.conf.100` | required; `link.exe` renames the one for the link speed to `aria2.conf` |
 | `ip.txt` | static IP base; tried first or as fallback (`DHCP_ENABLE`) |
-| `config.cmd` | copied from `bats\Media\pe\config.cmd`; WinPE settings |
+| `config.cmd` | copied from `data\Media\pe\config.cmd`; WinPE settings |
 
-`bats\Media\pe\config.cmd` on the build PC is the original: making or updating a
+`data\Media\pe\config.cmd` on the build PC is the original: making or updating a
 USB drive (`2`, `3`) copies it over a `config.cmd` that was changed on the
 drive.
 
@@ -956,29 +1094,31 @@ drive.
 ### Shared scripts
 
 The WinPE scripts that the client local boot and the media both need are kept
-once, in `bats\common`. `01_make_pe.bat`, `03_make_test_pe.bat` and `02_make_media.bat`
-copy `bats\common` into the image after `bats\pe` or `bats\Media\pe`, so a
+once, in `data\common`. `01_make_pe.bat`, `03_make_test_pe.bat` and `02_make_media.bat`
+copy `data\common` into the image after `data\pe` or `data\Media\pe`, so a
 change there reaches every image at the next build. The few differences
 (the boot media is never a download drive, `pc_ip.txt` is moved instead of
 copied, the reminder to remove the media) are handled inside the shared
 scripts: `MEDIA_DRV` is set only by the `startnet.cmd` of the media.
 
-If a script with the same name as one in `bats\common` is still in `bats\pe`
-or `bats\Media\pe` (left from an older version), the build prints a warning
-and the `bats\common` copy is used. Delete the old copy.
+If a script with the same name as one in `data\common` is still in `data\pe`
+or `data\Media\pe` (left from an older version), the build prints a warning
+and the `data\common` copy is used. Delete the old copy.
 
 ## Configuration
 
-Change values in these files, not in the scripts.
+Change values in these files, not in the scripts — on the pages of DVT GUI or
+in Notepad. The GUI changes only the `set "NAME=VALUE"` lines and keeps a copy
+of the old file in `_output\gui_backup\`.
 
 | File | Used by |
 |---|---|
-| `bats\host\config.cmd` | client PC (`make_boot.bat`) and build PC (`01_make_pe.bat`) |
-| `bats\pe\config.cmd` | WinPE of the client local boot |
-| `bats\Media\config.cmd` | `02_make_media.bat` (loads `bats\host\config.cmd` first) |
-| `bats\Media\pe\config.cmd` | WinPE of the USB / CD media |
+| `data\host\config.cmd` | client PC (`make_boot.bat`) and build PC (`01_make_pe.bat`) |
+| `data\pe\config.cmd` | WinPE of the client local boot |
+| `data\Media\config.cmd` | `02_make_media.bat` (loads `data\host\config.cmd` first) |
+| `data\Media\pe\config.cmd` | WinPE of the USB / CD media |
 
-### `bats\host\config.cmd` (client PC and build PC)
+### `data\host\config.cmd` (client PC and build PC)
 
 | Variable | Default | Description |
 |---|---|---|
@@ -987,7 +1127,7 @@ Change values in these files, not in the scripts.
 | `TORRENT` | `%WORK_DIR%\DVT_backup.torrent` | Torrent copied into the image |
 | `NETDRV_EXCLUDE` | `Realtek` | Regex; matching network drivers are not exported. Empty = export all. For Realtek, put the WinPE driver in `drivers\` (see [Realtek NICs](#realtek-nics)) |
 | `BOOT_MOUNT_DIR` | `%SystemDrive%\DVT_BootMount` | Local mount folder |
-| `DISK_ID_NAME` | `target_disk.txt` | File in the image that holds the disk ID (must match `DISK_ID_FILE` in `bats\pe\config.cmd`) |
+| `DISK_ID_NAME` | `target_disk.txt` | File in the image that holds the disk ID (must match `DISK_ID_FILE` in `data\pe\config.cmd`) |
 | `BITLOCKER_SUSPEND` | `1` | `1` = suspend BitLocker on the Windows drive for one restart, `0` = leave it |
 | `BOOT_ENTRY_NAME` | `DVT WinPE` | Name of the boot menu entry |
 | `BCD_CLEANUP_MODE` | `2` | Removal of the boot entry: `1` from WinPE, `2` at the next Windows boot (scheduled task), `0` never |
@@ -995,9 +1135,9 @@ Change values in these files, not in the scripts.
 | `ADK_PE_DIR`, `PE_LANG` | ADK amd64, `en-us` | Source of `winpe.wim` |
 | `BUILD_LOCAL` | `%SystemDrive%\WinPE_LocalBuild` | Local build folder |
 | `PE_SCRATCH_MB` | `512` | WinPE scratch space |
-| `PE_COMMON_DIR` | `bats\common` | Shared WinPE scripts, copied into every image |
+| `PE_COMMON_DIR` | `data\common` | Shared WinPE scripts, copied into every image |
 
-### `bats\pe\config.cmd` (WinPE, client local boot)
+### `data\pe\config.cmd` (WinPE, client local boot)
 
 | Variable | Default | Description |
 |---|---|---|
@@ -1025,7 +1165,7 @@ Change values in these files, not in the scripts.
 | `BCD_LOCALE` | `ko-kr` | Locale passed to `bcdboot` |
 | `FAIL_REBOOT_SEC`, `DONE_REBOOT_SEC` | `10`, `5` | Reboot delays |
 
-### `bats\Media\config.cmd` (02_make_media.bat)
+### `data\Media\config.cmd` (02_make_media.bat)
 
 | Variable | Default | Description |
 |---|---|---|
@@ -1034,9 +1174,9 @@ Change values in these files, not in the scripts.
 | `USB_PART_MB` | *(empty)* | Size of the USB partition in MB; empty = the whole disk |
 | `MEDIA_OUT_DIR` | `_output\media` in the build folder | Result folder (`boot.wim`, `DVT_media.iso`) |
 
-### `bats\Media\pe\config.cmd` (WinPE, USB / CD media)
+### `data\Media\pe\config.cmd` (WinPE, USB / CD media)
 
-It has the same variables as `bats\pe\config.cmd` except `AUTO_DISK_FALLBACK`
+It has the same variables as `data\pe\config.cmd` except `AUTO_DISK_FALLBACK`
 and `DISK_ID_FILE` (the operator chooses the disk), plus:
 
 | Variable | Default | Description |
@@ -1071,15 +1211,15 @@ warning.
 
 ### aria2 profiles
 
-`bats\pe\aria2.conf.100` and `bats\pe\aria2.conf.1G` (for the media:
-`bats\Media\config\aria2.conf.*`) are ordinary aria2 configuration files. Both seed
+`data\pe\aria2.conf.100` and `data\pe\aria2.conf.1G` (for the media:
+`data\Media\config\aria2.conf.*`) are ordinary aria2 configuration files. Both seed
 for up to 60 minutes after the download, disable DHT/PEX/LPD and run
 `start_restore.bat` when the download is complete. The 1 Gbps profile allows
 more peers, removes the upload limit and enables a disk cache.
 
 ## Version
 
-The DVT version is set in one place, `bats\common\version.cmd`
+The DVT version is set in one place, `data\common\version.cmd`
 (`DVT_VERSION`). Every `config.cmd` loads it. It is shown in the banner and the
 window title of the build scripts, `make_boot.bat`, WinPE and the test report.
 
@@ -1091,7 +1231,7 @@ reg query HKLM\SOFTWARE\DVT
 
 | Value | Example |
 |---|---|
-| `Version` | `0.2.0` |
+| `Version` | `0.3.0` |
 | `BootMode` | `Local` (client local boot) or `Media` |
 | `RestoredAt` | date and time in WinPE (`%DATE% %TIME%`) |
 | `Torrent` | `DVT_backup` |
@@ -1108,7 +1248,8 @@ reg query HKLM\SOFTWARE\DVT
 |---|---|
 | `01_make_pe.bat` | Builds `_output\boot\boot.wim` from the ADK `winpe.wim` (scripts, tools, drivers, Num Lock on) and copies the host scripts into `_output\boot\` |
 | `03_make_test_pe.bat` | Builds the test image `_output\boot_test\boot.wim` (network, gateway and seeder check, FTP upload of `<ip>.txt`, no disk access) |
-| `02_make_media.bat` | Builds `_output\media\boot.wim` from the ADK `winpe.wim` with `bats\Media\pe`, then writes the ISO, a new USB drive, or updates a USB drive (`iso`, `usb`, `update`) |
+| `02_make_media.bat` | Builds `_output\media\boot.wim` from the ADK `winpe.wim` with `data\Media\pe`, then writes the ISO, a new USB drive, or updates a USB drive (`iso`, `usb`, `update`) |
+| `DVT_GUI.exe` | DVT GUI: edits the settings, installs the ADK and the WinPE tools, starts the three scripts above |
 
 ### Client PC (Windows, client local boot)
 
@@ -1124,7 +1265,7 @@ reg query HKLM\SOFTWARE\DVT
 | `set_bcd.bat` | Creates a ramdisk boot entry for `boot.wim`, used for the next boot only |
 | `show_ip.bat` | Shows the last octet of the IP address in large digits |
 
-### WinPE, shared (`bats\common\`)
+### WinPE, shared (`data\common\`)
 
 | Script | Purpose |
 |---|---|
@@ -1140,7 +1281,7 @@ reg query HKLM\SOFTWARE\DVT
 | `restore.bat` | Applies the image, drivers, boot files, writes `HKLM\SOFTWARE\DVT`, registers `setpc.bat`, cleans up and reboots |
 | `ping_host.bat`, `wait.bat` | Helpers (`timeout.exe` is not available in WinPE) |
 
-### WinPE, client local boot only (`bats\pe\`)
+### WinPE, client local boot only (`data\pe\`)
 
 | Script | Purpose |
 |---|---|
@@ -1148,7 +1289,7 @@ reg query HKLM\SOFTWARE\DVT
 | `start_dvt.bat` | Main flow: checks, network, erase, download |
 | `get_disk.bat` | Disk to erase (disk ID, fallback) |
 
-### WinPE, USB / CD media only (`bats\Media\pe\`)
+### WinPE, USB / CD media only (`data\Media\pe\`)
 
 | Script | Purpose |
 |---|---|
@@ -1168,7 +1309,7 @@ reg query HKLM\SOFTWARE\DVT
 | "Disk N is too small for this image" | The disk space check failed before erasing. Use a larger disk, put a second disk with free space in the PC, or set `APPLIED_SIZE_MB` (exact size) or `SPACE_CHECK`. |
 | "Image N could not be read from backup.wim" | `WIM_INDEX` does not exist in `backup.wim`. List the images with `wimlib-imagex info backup.wim`. |
 | `make_boot.bat`: "BitLocker could not be suspended" | Suspend it by hand (`manage-bde -protectors -disable C: -RebootCount 1`) or set `BITLOCKER_SUSPEND=0`. |
-| Build: "... is in bats\common and in ..." | A script left from an older version. Delete the copy in `bats\pe` or `bats\Media\pe`. |
+| Build: "... is in data\common and in ..." | A script left from an older version. Delete the copy in `data\pe` or `data\Media\pe`. |
 | "No seeder is reachable" | Tracker/seeder running? `dvt_check.txt` in the torrent? Log: `%TEMP%\dvt_seeder.log`. |
 | "The seeder check file in the torrent is empty" | `dvt_check.txt` in the torrent is a 0-byte file. Give it content and create the torrent again. |
 | No network in WinPE | The NIC driver may be missing. Check `NETDRV_EXCLUDE`, or add the driver to `drivers\` and rebuild. Realtek NICs need the WinPE driver. |

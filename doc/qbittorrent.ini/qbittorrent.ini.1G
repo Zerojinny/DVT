@@ -34,7 +34,6 @@ Session\LSDEnabled=false
 Session\Encryption=0
 Session\AnonymousModeEnabled=false
 Session\BandwidthSchedulerEnabled=false
-Session\InterfaceAddress=203.244.132.147
 Session\GlobalUPSpeedLimit=0
 Session\GlobalDLSpeedLimit=0
 Session\MaxUploads=-1

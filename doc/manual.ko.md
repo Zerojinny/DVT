@@ -15,6 +15,10 @@ wimlib로 적용합니다. 다운로드를 마친 PC는 다른 PC에게 업로�
   Windows가 시작되지 않는 PC나, Windows가 설치 되어 있지 않은 PC등에서 사용합니다. 
   작업자가 PC마다 IP 주소와 디스크를 입력합니다.
 
+빌드 PC에서는 **DVT GUI**(`DVT_GUI.exe`)로 설정을 편집하고, Windows ADK와 WinPE 도구를
+설치하고, 빌드를 시작합니다. 모든 단계는 `data\`의 배치 파일을 직접 실행해서도 할 수
+있습니다.
+
 모든 스크립트는 순수 Windows 배치 파일입니다. WinPE 안에서 실행되는 스크립트는
 WinPE 기본 도구만 사용하며(WMIC, WMI, PowerShell, findstr 사용 안 함),
 추가로 aria2c, wimlib-imagex, NirCmd를 사용합니다.
@@ -32,6 +36,7 @@ WinPE 기본 도구만 사용하며(WMIC, WMI, PowerShell, findstr 사용 안 �
 - [주요 기능](#주요-기능)
 - [요구 사항](#요구-사항)
 - [저장소 구성](#저장소-구성)
+- [DVT GUI (빌드 PC)](#dvt-gui-빌드-pc)
 - [빠른 시작 — 클라이언트 로컬부팅](#빠른-시작--클라이언트-로컬부팅)
 - [빠른 시작 — USB / CD 미디어](#빠른-시작--usb--cd-미디어)
 - [테스트 이미지](#테스트-이미지)
@@ -57,15 +62,15 @@ WinPE 기본 도구만 사용하며(WMIC, WMI, PowerShell, findstr 사용 안 �
 |---|---|---|
 | 빌드 PC | `01_make_pe.bat` → `_output\boot\` 폴더 | `02_make_media.bat` → ISO 또는 USB 드라이브 |
 | WinPE 전 클라이언트 PC | Windows에서 `C:\temp\boot\make_boot.bat` 실행 (PC마다 한 번) | 없음 — 미디어로 부팅 |
-| WinPE 주 스크립트 | `bats\pe\start_dvt.bat` | `bats\Media\pe\start_media.bat` |
+| WinPE 주 스크립트 | `data\pe\start_dvt.bat` | `data\Media\pe\start_media.bat` |
 | IP 주소 | Windows에서 확인 (고정 IP → `ip.txt`) | `ip.txt`의 고정 IP(끝자리는 작업자 입력) 또는 DHCP, 순서는 `DHCP_ENABLE` |
 | 지울 디스크 | 자동 판별 (디스크 ID, 다음으로 RAW 볼륨 대체 규칙) | 작업자가 입력 |
 | 지우기 전 실패 시 | 기존 Windows로 재부팅 | 키 입력을 기다린 뒤 재부팅 |
-| WinPE 설정 | `bats\pe\config.cmd` (`boot.wim` 안) | `bats\Media\pe\config.cmd` (미디어에도 복사, USB에서 수정 가능) |
+| WinPE 설정 | `data\pe\config.cmd` (`boot.wim` 안) | `data\Media\pe\config.cmd` (미디어에도 복사, USB에서 수정 가능) |
 
 두 방법 모두 무엇이든 지우기 **전에** 게이트웨이, 시더, 디스크 공간을 확인하며, 같은
 토렌트, aria2 프로필, 다운로드, 복원(`restore.bat`, `setpc.bat`)을 사용합니다. 두
-방법이 함께 쓰는 WinPE 스크립트는 `bats\common`에 한 벌만 둡니다.
+방법이 함께 쓰는 WinPE 스크립트는 `data\common`에 한 벌만 둡니다.
 
 ### 클라이언트 로컬부팅
 
@@ -112,9 +117,9 @@ WinPE 기본 도구만 사용하며(WMIC, WMI, PowerShell, findstr 사용 안 �
 [1] 빌드 PC ── 02_make_media.bat
       source\winpe.wim (ADK 원본 사본)
       + pe_tools, drivers, nircmd
-      + bats\Media\pe, bats\common  (이 스크립트만 사용)
+      + data\Media\pe, data\common  (이 스크립트만 사용)
       → _output\media\boot.wim
-      + source\adk_media, bats\Media\config, bats\Media\pe\config.cmd
+      + source\adk_media, data\Media\config, data\Media\pe\config.cmd
       → ISO (oscdimg) 또는 USB 드라이브
          │
          │  USB / CD로 부팅
@@ -142,8 +147,8 @@ WinPE 기본 도구만 사용하며(WMIC, WMI, PowerShell, findstr 사용 안 �
     재부팅 (USB / CD를 빼세요)
 ```
 
-미디어 이미지는 `_output\boot\boot.wim`이나 `bats\pe` 폴더를 **사용하지 않습니다**.
-`X:\restore`에는 `pe_tools`의 도구와 `bats\Media\pe`, `bats\common`의 파일만 들어갑니다.
+미디어 이미지는 `_output\boot\boot.wim`이나 `data\pe` 폴더를 **사용하지 않습니다**.
+`X:\restore`에는 `pe_tools`의 도구와 `data\Media\pe`, `data\common`의 파일만 들어갑니다.
 
 ## 주요 기능
 
@@ -180,12 +185,14 @@ WinPE 기본 도구만 사용하며(WMIC, WMI, PowerShell, findstr 사용 안 �
 **빌드 PC**
 
 - Windows 10/11 x64, 관리자 권한
+- DVT GUI: Windows 10/11의 .NET Framework 4.x(따로 설치할 것 없음)
 - [Windows ADK](https://learn.microsoft.com/windows-hardware/get-started/adk-install)와
   **Windows PE 추가 기능**(amd64). USB / CD 미디어는 ADK의 **Deployment Tools**도
-  필요합니다(처음 실행할 때만, 아래 참고).
+  필요합니다(처음 실행할 때만, 아래 참고). DVT GUI가 둘 다 설치합니다(*필수 구성 요소* 페이지).
 - `aria2c.exe`, `wimlib-imagex.exe`(DLL 포함) — `pe_tools\` 또는 `system32\`에 배치
-- `nircmd.exe`(x64) — `nircmd-x64\`에 배치
-- USB / CD 미디어만: `bats\Media\pe`의 64비트 `link.exe`. 컴파일하지 않고 그대로
+- `nircmd.exe`(x64) — `pe_tools\`에 배치(`NIRCMD_SRC`)
+- DVT GUI가 aria2, wimlib, NirCmd를 `pe_tools\`로 받아 줍니다(*필수 구성 요소* 페이지).
+- USB / CD 미디어만: `data\Media\pe`의 64비트 `link.exe`. 컴파일하지 않고 그대로
   사용하며, 없으면 `02_make_media.bat`이 중단됩니다.
 
 `02_make_media.bat`은 ADK의 `Media` 폴더를 `source\adk_media`에, oscdimg·부트 섹터
@@ -211,17 +218,21 @@ WinPE 기본 도구만 사용하며(WMIC, WMI, PowerShell, findstr 사용 안 �
 
 ```
 dvt/
-├─ 01_make_pe.bat           WinPE 이미지 빌드 (빌드 PC)
-├─ 03_make_test_pe.bat      테스트용 WinPE 이미지 빌드 (빌드 PC)
-├─ 02_make_media.bat        USB / CD 미디어 빌드: ISO, 새 USB 드라이브,
-│                           USB 드라이브 갱신 (빌드 PC)
+├─ DVT_GUI.exe              DVT GUI (선택)
+├─ lang/                    DVT GUI 언어 파일 (en.ini, ko.ini)
 ├─ qbittorrent-setup.ko.md  qBittorrent 시더·트래커 설정 매뉴얼
 ├─ qbittorrent-setup.en.md  같은 매뉴얼의 영어판
 ├─ doc/                     manual.md / manual.ko.md (README와 qBittorrent
 │  │                        매뉴얼을 합친 문서)와 PDF
+│  ├─ images/               DVT GUI 스크린샷 (*.en.png, *.ko.png)
 │  └─ qbittorrent.ini/      qBittorrent 설정 파일: qbittorrent.ini.1G,
 │                           qbittorrent.ini.100
-├─ bats/                    모든 스크립트
+├─ data/                    모든 스크립트와 설정
+│  ├─ 01_make_pe.bat           WinPE 이미지 빌드 (빌드 PC)
+│  ├─ 03_make_test_pe.bat      테스트용 WinPE 이미지 빌드 (빌드 PC)
+│  ├─ 02_make_media.bat        USB / CD 미디어 빌드: ISO, 새 USB 드라이브,
+│  │                           USB 드라이브 갱신 (빌드 PC)
+│  ├─ adk.ini                  GUI의 ADK 릴리스 목록 (링크, 해시)
 │  ├─ common/                  클라이언트 로컬부팅, 테스트 이미지, USB / CD
 │  │  │                        미디어가 함께 쓰는 WinPE 스크립트
 │  │  │                        (pe/ 또는 Media/pe/ 다음에 X:\restore로 복사)
@@ -274,10 +285,9 @@ dvt/
 │     └─ upload_ftp.bat        FTP 업로드 (curl.exe 또는 ftp.exe)
 │
 │  ── 저장소에 포함되지 않음, 직접 준비 ──
-├─ pe_tools/                aria2c.exe, wimlib-imagex.exe, DLL -> X:\restore
+├─ pe_tools/                aria2c.exe, wimlib-imagex.exe, DLL, nircmd.exe -> X:\restore
 ├─ system32/                선택 사항, X:\Windows\System32로 복사
 ├─ drivers/                 선택 사항, 모든 WinPE 이미지에 추가할 드라이버
-├─ nircmd-x64/nircmd.exe
 │
 │  ── 빌드 스크립트가 생성 ──
 ├─ source/                  ADK 파일 보관본 (처음 실행할 때만 복사)
@@ -293,19 +303,129 @@ dvt/
    └─ media/                02_make_media.bat 결과: 미디어용 boot.wim, DVT_media.iso
 ```
 
+## DVT GUI (빌드 PC)
+
+빌드 PC에서 하는 일은 모두 **DVT GUI**(`DVT_GUI.exe`)에서 할 수 있습니다. 설정을
+편집하고, 필수 구성 요소를 설치하고, 빌드를 시작합니다. GUI는 `data\`의 설정 파일을
+고치고 `data\`의 배치 파일을 실행할 뿐이므로, 모든 단계를 GUI 없이도 할 수 있습니다.
+배치 파일을 직접 실행하고 `config.cmd` 파일을 메모장으로 고치면 됩니다
+([GUI 없이 사용](#gui-없이-사용) 참고).
+
+### 실행
+
+1. `DVT_GUI.exe`는 빌드 폴더(`data\`가 있는 폴더)에 둡니다. Windows 10/11에 들어 있는
+   .NET Framework 4.x 외에는 필요한 것이 없습니다.
+2. `DVT_GUI.exe`를 더블클릭합니다. 관리자 권한은 필요 없습니다. 각 빌드는 자기
+   콘솔 창에서 관리자 권한을 요청하고, 스크립트의 질문(재빌드 Y/N, USB 디스크 번호,
+   `YES`, 드라이브 문자)도 그 창에서 답합니다.
+
+### 페이지
+
+왼쪽 사이드바로 네 페이지를 전환합니다. 페이지마다 색이 다르며, 저장하지 않은
+변경은 사이드바의 점과 탭의 `●`로 표시됩니다.
+
+| 페이지 | 실행 | 편집하는 설정 |
+|---|---|---|
+| **클라이언트 로컬부팅** | `data\01_make_pe.bat` | `data\host\config.cmd`, `data\pe\config.cmd`, aria2 프로필 |
+| **USB / CD 미디어** | `data\02_make_media.bat iso` / `usb` / `update` | `data\Media\pe\config.cmd`, `ip.txt`, 토렌트, aria2 프로필, `data\Media\config.cmd` |
+| **테스트 부팅** | `data\03_make_test_pe.bat` | `data\test\test_config.cmd` |
+| **필수 구성 요소** | Windows ADK 설치, 도구 다운로드 | — |
+
+![클라이언트 로컬부팅 페이지](images/gui_local.ko.png)
+
+- **설정 표:** 모든 설정에 짧은 설명이 있고, 줄을 선택하면 표 아래에 자세한
+  도움말(기능, 선택지, 파일의 주석)이 나옵니다. 선택지가 정해진 설정은 드롭다운으로
+  고릅니다. 보통 바꾸지 않는 설정(경로, 도구 위치, 색 등)은 **고급 설정 표시**를
+  체크해야 보입니다.
+- **저장**은 바뀐 `set "NAME=VALUE"` 줄만 고치고 주석은 그대로 둡니다. 저장하기 전에
+  이전 파일을 `_output\gui_backup\`에 복사합니다. **다시 읽기**는 파일을 다시 읽고,
+  **메모장으로 열기**는 직접 편집할 때 씁니다.
+- **이미지 빌드**는 `01_make_pe.bat`을 실행합니다(저장하지 않은 변경이 있으면 먼저
+  저장할지 묻습니다). 버튼 아래 줄에 `boot.wim`의 빌드 여부가 표시됩니다.
+- **클라이언트 패키지 복사...** 는 `_output\boot`를 고른 폴더(USB 메모리, 공유
+  폴더 등)로 복사합니다. 이것을 클라이언트의 `C:\temp\boot`로 복사하면 됩니다.
+
+![USB / CD 미디어 페이지](images/gui_media.ko.png)
+
+- **CD / DVD용 ISO 파일**, **새 USB 드라이브 (지워짐)**, **기존 DVT USB 드라이브 갱신
+  (포맷 안 함)** 중 하나를 고르고 **미디어 만들기**를 누릅니다.
+- **미디어 설정 위치:** 빌드 폴더(`data\Media`, 새 미디어를 만들 때 사용) 또는 기존
+  DVT USB 드라이브. USB 드라이브를 고르면 WinPE 설정, `ip.txt`, 토렌트를
+  `<USB>:\config`에서 직접 읽고 씁니다. 다시 빌드하지 않아도 다음 부팅부터 적용됩니다.
+- 탭: **WinPE 설정**, **고정 IP (ip.txt)**(PC마다 한 줄, 저장 전에 검사),
+  **토렌트와 aria2**, **미디어 빌드**.
+
+![테스트 부팅 페이지](images/gui_test.ko.png)
+
+- FTP 서버(`FTP_HOST`, `FTP_USER`, `FTP_PASS` 등)를 설정하고 **테스트 이미지 빌드**를
+  누릅니다. 네트워크·시더 점검 설정은 `data\pe\config.cmd`(*클라이언트 로컬부팅*
+  페이지)를 따릅니다.
+
+### 필수 구성 요소
+
+![필수 구성 요소 - Windows ADK](images/gui_adk.ko.png)
+
+**Windows ADK** 탭은 DVT에 필요한 것만 설치합니다. Windows ADK의 **배포 도구**와
+**Windows PE 추가 기능**입니다. 현재 설치 상태도 보여 줍니다.
+
+- **설치할 버전:** `data\adk.ini`의 ADK 릴리스입니다. Windows 10 1809
+  (10.1.17763.7320)부터 최신(기본값)까지 있고, 설치된 버전이 표시됩니다. 다른 버전이
+  설치되어 있으면 *설치된 ADK와 WinPE 추가 기능을 먼저 제거*가 체크됩니다(ADK
+  설치 프로그램은 다른 버전을 덮어쓰지 못함, 오류 2008).
+- **다운로드 후 설치:** 선택한 릴리스의 `adksetup.exe`와 `adkwinpesetup.exe`를
+  Microsoft에서 받아, Microsoft 서명과 그 릴리스의 SHA256을 확인한 뒤 관리자 권한을
+  한 번 물어 조용히 설치합니다. 설치 프로그램이 수 GB를 내려받으며 10~30분 걸립니다.
+  로그: `_output\adk_setup\`.
+- **오프라인 패키지 만들기...** / **오프라인 패키지로 설치...** 는 인터넷이 안 되는
+  빌드 PC용입니다.
+- 새 릴리스는 `data\adk.ini`에 `[release <버전>]` 구역(링크, 해시)을 추가합니다.
+  GUI를 다음에 시작할 때부터 적용됩니다.
+
+![필수 구성 요소 - WinPE 도구](images/gui_tools.ko.png)
+
+**WinPE 도구** 탭은 aria2, wimlib, NirCmd(x64)를 공식 사이트에서 받아 zip의 SHA256을
+알려진 해시와 비교한 뒤 `pe_tools\`(`PE_TOOLS_DIR`)로 복사합니다. 바뀌는 파일은
+`_output\tools_backup\`에 먼저 백업합니다.
+
+### 언어
+
+GUI의 모든 문구는 `lang\en.ini`, `lang\ko.ini`에 있습니다. 언어는 사이드바 아래에서
+고르며, 선택은 `data\gui_settings.ini`에 저장됩니다. 언어 파일은 `DVT_GUI.exe` 옆의 `lang\`을 먼저 찾고, 없으면 exe에 내장된
+파일을 쓰므로 파일만 고치면 문구가 바뀝니다. 새 언어는 `en.ini`를 복사해 번역하면
+다음 실행 때 목록에 나타납니다.
+
+### GUI 없이 사용
+
+| GUI에서 | GUI 없이 |
+|---|---|
+| 설정 편집, **저장** | `data\`의 `config.cmd` 파일을 메모장으로 수정 |
+| **이미지 빌드** | `data\01_make_pe.bat` 실행 |
+| **미디어 만들기** | `data\02_make_media.bat` 실행(메뉴), 또는 `02_make_media.bat iso` / `usb` / `update` |
+| **테스트 이미지 빌드** | `data\03_make_test_pe.bat` 실행 |
+| **클라이언트 패키지 복사...** | `_output\boot`(또는 `_output\boot_test`)를 직접 복사 |
+| **Windows ADK** | [Microsoft 페이지](https://learn.microsoft.com/windows-hardware/get-started/adk-install)에서 ADK(배포 도구)와 WinPE 추가 기능 설치 |
+| **WinPE 도구** | 도구를 받아 `pe_tools\`에 넣기 |
+
+배치 파일은 스스로 관리자 권한을 요청합니다.
+
 ## 빠른 시작 — 클라이언트 로컬부팅
 
 ### 1. WinPE 이미지 빌드 (빌드 PC)
 
-1. Windows ADK와 WinPE 추가 기능을 설치합니다.
-2. `aria2c.exe`, `wimlib-imagex.exe`와 DLL을 `pe_tools\`에,
-   `nircmd.exe`를 `nircmd-x64\`에 넣습니다.
-3. 필요하면 `drivers\`에 드라이버를 넣습니다(예: 신형 하드웨어용 스토리지 드라이버,
+1. `DVT_GUI.exe`를 시작합니다([DVT GUI](#dvt-gui-빌드-pc) 참고).
+2. *필수 구성 요소* → **Windows ADK**: 버전을 고르고 **다운로드 후 설치**를 누릅니다.
+   GUI 없이: Microsoft에서 Windows ADK(배포 도구)와 WinPE 추가 기능을 설치합니다.
+3. *필수 구성 요소* → **WinPE 도구**: **없는 도구 다운로드**를 누릅니다.
+   GUI 없이: `aria2c.exe`, `wimlib-imagex.exe`와 DLL, `nircmd.exe`(x64)를 `pe_tools\`에
+   넣습니다.
+4. 필요하면 `drivers\`에 드라이버를 넣습니다(예: 신형 하드웨어용 스토리지 드라이버,
    [Realtek 랜카드](#realtek-랜카드)용 WinPE 드라이버).
-4. `bats\pe\config.cmd`를 확인합니다([설정](#설정) 참고).
-5. `01_make_pe.bat`을 실행합니다. 필요하면 관리자 권한을 요청합니다.
+5. *클라이언트 로컬부팅*: 두 탭의 설정(`data\host\config.cmd`, `data\pe\config.cmd`,
+   [설정](#설정) 참고)을 확인하고 **저장**합니다.
+6. **이미지 빌드**를 누릅니다. GUI 없이: `data\01_make_pe.bat`을 실행합니다. 필요하면
+   관리자 권한을 요청합니다.
 
-결과물은 `_output\boot\` 폴더입니다. 이 폴더에는 `boot.wim`, `boot.sdi`, `bats\host\`의
+결과물은 `_output\boot\` 폴더입니다. 이 폴더에는 `boot.wim`, `boot.sdi`, `data\host\`의
 모든 파일, `version.cmd`가 복사되어 있어, 토렌트를 제외하면 클라이언트 PC에 필요한 것이 모두 들어 있습니다.
 
 > 마운트 폴더와 작업 폴더는 로컬 시스템 드라이브(`C:\WinPE_LocalBuild`)에 있습니다.
@@ -320,6 +440,7 @@ dvt/
 ### 3. 각 클라이언트 PC 준비
 
 빌드 PC의 `_output\boot\` 폴더를 클라이언트의 `C:\temp\boot`로, 토렌트를 `C:\temp`로 복사합니다.
+GUI의 **클라이언트 패키지 복사...** 로 `_output\boot`를 먼저 USB 메모리나 공유 폴더에 복사할 수 있습니다.
 
 ```
 C:\temp\
@@ -362,13 +483,16 @@ PC가 WinPE로 부팅해 스스로 복원합니다. 콘솔 색으로 상태를 �
 
 1. 토렌트와 시더를 준비합니다([토렌트 준비](#토렌트-준비),
    [qBittorrent 설정](#qbittorrent-설정-시더와-트래커) 참고).
-2. `bats\Media\config`에 파일을 넣습니다: `DVT_backup.torrent`, `aria2.conf.100`,
-   `aria2.conf.1G`, 고정 IP를 쓸 때 `ip.txt`([네트워크](#네트워크) 참고).
-3. `bats\Media\pe\config.cmd`를 확인합니다([설정](#설정) 참고).
-4. 빌드 폴더의 `02_make_media.bat`을 관리자 권한으로 실행하고 선택합니다.
+2. DVT GUI의 *USB / CD 미디어* 페이지에서 **토렌트와 aria2** 탭으로 토렌트를 고르고,
+   **고정 IP (ip.txt)** 탭에 고정 IP를 입력합니다([네트워크](#네트워크) 참고).
+   GUI 없이: `data\Media\config`에 `DVT_backup.torrent`, `aria2.conf.100`,
+   `aria2.conf.1G`, `ip.txt`를 넣습니다.
+3. **WinPE 설정** 탭(`data\Media\pe\config.cmd`, [설정](#설정) 참고)을 확인하고 저장합니다.
+4. ISO, 새 USB 드라이브, 갱신 중 하나를 고르고 **미디어 만들기**를 누릅니다. 또는
+   `data\02_make_media.bat`을 관리자 권한으로 실행하고 선택합니다.
    - `1` ISO → `_output\media\DVT_media.iso`, CD / DVD로 굽기
    - `2` USB → 선택한 **USB** 디스크를 지우고 부팅 가능하게 만듦
-     (디스크 전체를 FAT32로, `bats\Media\config.cmd`의 `USB_FS`, `USB_PART_MB`)
+     (디스크 전체를 FAT32로, `data\Media\config.cmd`의 `USB_FS`, `USB_PART_MB`)
    - `3` 갱신 → 기존 DVT USB 드라이브에 새 파일 복사
 
    `02_make_media.bat iso`, `02_make_media.bat usb`, `02_make_media.bat update`로 메뉴를
@@ -407,10 +531,10 @@ PC가 WinPE로 부팅해 스스로 복원합니다. 콘솔 색으로 상태를 �
 
 사용 순서:
 
-1. `bats\test\test_config.cmd`에 FTP 서버를 설정합니다:
+1. DVT GUI의 *테스트 부팅* 페이지(또는 `data\test\test_config.cmd`)에서 FTP 서버를 설정합니다:
    `FTP_HOST`, `FTP_PORT`, `FTP_USER`, `FTP_PASS`, 필요하면 `FTP_DIR`
    (로그인 폴더 기준 상대 경로). 값에 `!`와 `"`는 쓸 수 없습니다.
-2. 빌드 PC에서 `03_make_test_pe.bat`을 실행합니다. 결과물은 `_output\boot_test\` 폴더입니다.
+2. **테스트 이미지 빌드**를 누르거나, 빌드 PC에서 `data\03_make_test_pe.bat`을 실행합니다. 결과물은 `_output\boot_test\` 폴더입니다.
 3. 클라이언트에서 `_output\boot_test\`를 `C:\temp\boot_test`로 복사하고, 토렌트를 `C:\temp`에 둔 뒤
    `C:\temp\boot_test\make_boot.bat`을 실행합니다. `make_boot.bat`은 항상 자기 폴더의 `boot.wim`을
    사용하므로 `C:\temp\boot`와 `C:\temp\boot_test`를 클라이언트에 함께 둘 수 있습니다.
@@ -472,13 +596,13 @@ DVT_backup\
 
 - `dvt_check.txt`는 토렌트를 만들기 **전에** 넣어야 합니다. WinPE는 무엇이든 지우기
   전에 이 파일만 내려받아 시더에 연결되는지 확인합니다.
-- 토렌트에 트래커 URL을 넣습니다. 또는 `bats\pe\config.cmd`나 `bats\Media\pe\config.cmd`에서
+- 토렌트에 트래커 URL을 넣습니다. 또는 `data\pe\config.cmd`나 `data\Media\pe\config.cmd`에서
   `SEEDER_EXTRA_OPTS=--bt-tracker=http://...`를 지정할 수 있습니다(이 값은 시더 점검에만
   쓰이며, 본 다운로드는 토렌트와 `aria2.conf`의 설정을 따릅니다).
 - 토렌트 파일 이름은 `DVT_backup.torrent`로 저장합니다. 클라이언트 로컬부팅은 각 클라이언트의
-  `C:\temp`에, 미디어는 `bats\Media\config`에 둡니다.
-- `backup.wim`에 이미지가 여러 개 있으면 `bats\pe\config.cmd`와
-  `bats\Media\pe\config.cmd`의 `WIM_INDEX`로 적용할 이미지를 고릅니다(기본값 `1`).
+  `C:\temp`에, 미디어는 `data\Media\config`에 둡니다.
+- `backup.wim`에 이미지가 여러 개 있으면 `data\pe\config.cmd`와
+  `data\Media\pe\config.cmd`의 `WIM_INDEX`로 적용할 이미지를 고릅니다(기본값 `1`).
   이미지 목록은 `wimlib-imagex info backup.wim`으로 확인합니다. 없는 인덱스를 지정하면
   이미지를 적용하기 전에 메시지와 함께 중단합니다.
 - 클라이언트가 고정 IP를 쓰면 `ip.txt`(ip, 서브넷, 게이트웨이, 알 수 있으면 DNS)도
@@ -736,7 +860,7 @@ aria2는 V2·혼합 토렌트를 받지 못하므로, 일반 빌드에서는 토
 
 `get_disk.bat`은 다음 순서로 지울 디스크를 정합니다.
 
-1. `bats\pe\config.cmd`의 **`FORCE_DISK`** (지정된 경우)
+1. `data\pe\config.cmd`의 **`FORCE_DISK`** (지정된 경우)
 2. 이미지 안의 `target_disk.txt`와 **디스크 ID**가 같은 디스크. `make_boot.bat`이
    실행 중인 Windows가 있는 디스크의 ID(GPT 디스크 GUID 또는 MBR 서명)를 읽어
    `boot.wim`에 기록하고, WinPE는 이것을 `diskpart`가 보여 주는 각 디스크의
@@ -756,7 +880,7 @@ aria2는 V2·혼합 토렌트를 받지 못하므로, 일반 빌드에서는 토
 ID(또는 `FORCE_DISK`)를 반드시 요구하려면 `AUTO_DISK_FALLBACK=0`으로 설정하세요.
 
 > [!NOTE]
-> 디스크 ID는 `diskpart`의 영어 출력과 비교합니다. `bats\host\config.cmd`의
+> 디스크 ID는 `diskpart`의 영어 출력과 비교합니다. `data\host\config.cmd`의
 > `PE_LANG=en-us`(기본값)를 유지하세요. 다른 언어의 WinPE에서는 디스크 ID를 찾지
 > 못하고 대체 규칙(3단계)만 남습니다.
 
@@ -766,7 +890,7 @@ Windows 드라이브가 BitLocker로 보호되고 있으면 `make_boot.bat`이 �
 동안** 일시 중단합니다(`manage-bde -protectors -disable C: -RebootCount 1`).
 WinPE에서 점검이 실패해 Windows로 돌아가도 복구 키를 묻지 않고 시작하며, 그 뒤
 Windows가 보호를 스스로 다시 켭니다. 복원이 진행되면 어차피 디스크는 지워집니다.
-`bats\host\config.cmd`에서 `BITLOCKER_SUSPEND=0`으로 하면 BitLocker를 그대로 둡니다.
+`data\host\config.cmd`에서 `BITLOCKER_SUSPEND=0`으로 하면 BitLocker를 그대로 둡니다.
 
 위 2단계의 디스크 ID는 BitLocker 드라이브에서도 읽을 수 있으므로, 암호화 여부와
 관계없이 디스크를 찾습니다.
@@ -778,7 +902,7 @@ Windows가 보호를 스스로 다시 켭니다. 복원이 진행되면 어차�
 미디어의 디스크는 선택할 수 없습니다. `MEDIA_CONFIRM=1`(기본값)이면 디스크를
 지우기 전에 `Y`로 한 번 더 확인합니다.
 
-`bats\Media\pe\config.cmd`(또는 `<미디어>\config\config.cmd`)에 `FORCE_DISK`를
+`data\Media\pe\config.cmd`(또는 `<미디어>\config\config.cmd`)에 `FORCE_DISK`를
 지정하면 그 디스크를 지우며 작업자가 디스크를 고르지 않습니다. 고정 IP는 끝자리만
 입력하고(예: `150`), DHCP는 아무것도 입력하지 않습니다. `MEDIA_CONFIRM=0`까지
 설정하면 DHCP 부팅은 입력 없이 진행됩니다. 지정한 디스크가 없거나 부팅 미디어의
@@ -807,11 +931,11 @@ Windows가 보호를 스스로 다시 켭니다. 복원이 진행되면 어차�
   `NET_TEST_HOST`)에 응답하는 첫 어댑터를 사용하고 나머지는 DHCP로 되돌립니다.
 - **링크 속도**: `make_boot.bat`이 측정합니다. 1 Gbps 이상이면 `aria2.conf.1G`,
   그 밖에는 `aria2.conf.100`을 사용합니다. 클라이언트의 콘솔 색으로 어떤 프로필이
-  선택되었는지 알 수 있습니다(`bats\host\config.cmd`의 `COLOR_LINK_*`).
+  선택되었는지 알 수 있습니다(`data\host\config.cmd`의 `COLOR_LINK_*`).
 
 ### USB / CD 미디어
 
-순서는 `bats\Media\pe\config.cmd`의 `DHCP_ENABLE`로 정합니다.
+순서는 `data\Media\pe\config.cmd`의 `DHCP_ENABLE`로 정합니다.
 
 | `DHCP_ENABLE` | `ip.txt` | 동작 |
 |---|---|---|
@@ -821,7 +945,7 @@ Windows가 보호를 스스로 다시 켭니다. 복원이 진행되면 어차�
 
 어느 방법도 성공하지 못하면 아무것도 지우지 않고 키 입력 후 재부팅합니다.
 
-`bats\Media\config`의 `ip.txt`는 위와 같은 형식이지만, 1행은 기준 주소입니다.
+`data\Media\config`의 `ip.txt`는 위와 같은 형식이지만, 1행은 기준 주소입니다.
 앞 세 옥텟만 사용하며(`ipr`) 끝자리는 작업자가 입력합니다.
 
 ```
@@ -863,21 +987,21 @@ Windows용 드라이버를 WinPE에 넣으면 다운로드 중 **연결이 끊�
 
 ### config 폴더
 
-`02_make_media.bat`은 `bats\Media\config`의 파일과 `bats\Media\pe\config.cmd`를 `<미디어>\config`로
+`02_make_media.bat`은 `data\Media\config`의 파일과 `data\Media\pe\config.cmd`를 `<미디어>\config`로
 복사합니다. WinPE가 시작되면 `startnet.cmd`가 `<미디어>\config`를 `X:\restore`로
 복사하므로, USB 드라이브라면 다시 빌드하지 않고 바꿀 수 있습니다.
 `<미디어>\config\config.cmd`는 `boot.wim` 안의 `config.cmd`를 덮어쓰므로, 그
 설정(`DHCP_ENABLE`, `MEDIA_CONFIRM` 등)은 다음 부팅부터 적용됩니다. CD는
-`bats\Media\config`나 `bats\Media\pe\config.cmd`를 고친 뒤 다시 빌드해야 합니다.
+`data\Media\config`나 `data\Media\pe\config.cmd`를 고친 뒤 다시 빌드해야 합니다.
 
 | 파일 | 용도 |
 |---|---|
 | `DVT_backup.torrent` | 필수. 안의 `dvt_check.txt`가 비어 있으면 안 됨([토렌트 준비](#토렌트-준비) 참고) |
 | `aria2.conf.1G`, `aria2.conf.100` | 필수. `link.exe`가 링크 속도에 맞는 파일을 `aria2.conf`로 이름 변경 |
 | `ip.txt` | 고정 IP 기본값. 우선 또는 대체로 사용(`DHCP_ENABLE`) |
-| `config.cmd` | `bats\Media\pe\config.cmd` 사본. WinPE 설정 |
+| `config.cmd` | `data\Media\pe\config.cmd` 사본. WinPE 설정 |
 
-빌드 PC의 `bats\Media\pe\config.cmd`가 원본입니다. USB 드라이브를 새로 만들거나
+빌드 PC의 `data\Media\pe\config.cmd`가 원본입니다. USB 드라이브를 새로 만들거나
 갱신하면(`2`, `3`) USB에서 고친 `config.cmd`는 이 원본으로 덮어써집니다.
 
 ### USB 드라이브와 ISO
@@ -912,29 +1036,30 @@ Windows용 드라이버를 WinPE에 넣으면 다운로드 중 **연결이 끊�
 
 ### 공용 스크립트
 
-클라이언트 로컬부팅과 미디어가 모두 쓰는 WinPE 스크립트는 `bats\common`에 한 벌만
-둡니다. `01_make_pe.bat`, `03_make_test_pe.bat`, `02_make_media.bat`은 `bats\pe`나
-`bats\Media\pe` 다음에 `bats\common`을 이미지에 복사하므로, 여기서 고친 내용은 다음
+클라이언트 로컬부팅과 미디어가 모두 쓰는 WinPE 스크립트는 `data\common`에 한 벌만
+둡니다. `01_make_pe.bat`, `03_make_test_pe.bat`, `02_make_media.bat`은 `data\pe`나
+`data\Media\pe` 다음에 `data\common`을 이미지에 복사하므로, 여기서 고친 내용은 다음
 빌드부터 모든 이미지에 반영됩니다. 몇 가지 차이(부팅 미디어는 다운로드 드라이브로
 쓰지 않음, `pc_ip.txt`는 복사가 아니라 이동, 미디어 제거 안내)는 공용 스크립트 안에서
 처리합니다. `MEDIA_DRV`는 미디어의 `startnet.cmd`만 설정합니다.
 
-`bats\common`과 같은 이름의 스크립트가 `bats\pe`나 `bats\Media\pe`에 남아 있으면(이전
-버전의 파일) 빌드할 때 경고를 표시하고 `bats\common`의 파일을 사용합니다. 남은
+`data\common`과 같은 이름의 스크립트가 `data\pe`나 `data\Media\pe`에 남아 있으면(이전
+버전의 파일) 빌드할 때 경고를 표시하고 `data\common`의 파일을 사용합니다. 남은
 사본은 지우세요.
 
 ## 설정
 
-스크립트가 아니라 다음 파일의 값을 수정하세요.
+스크립트가 아니라 다음 파일의 값을 수정하세요. DVT GUI의 각 페이지나 메모장에서 고칩니다.
+GUI는 `set "NAME=VALUE"` 줄만 바꾸고 이전 파일을 `_output\gui_backup\`에 복사해 둡니다.
 
 | 파일 | 사용처 |
 |---|---|
-| `bats\host\config.cmd` | 클라이언트 PC(`make_boot.bat`)와 빌드 PC(`01_make_pe.bat`) |
-| `bats\pe\config.cmd` | 클라이언트 로컬부팅의 WinPE |
-| `bats\Media\config.cmd` | `02_make_media.bat` (`bats\host\config.cmd`를 먼저 불러옴) |
-| `bats\Media\pe\config.cmd` | USB / CD 미디어의 WinPE |
+| `data\host\config.cmd` | 클라이언트 PC(`make_boot.bat`)와 빌드 PC(`01_make_pe.bat`) |
+| `data\pe\config.cmd` | 클라이언트 로컬부팅의 WinPE |
+| `data\Media\config.cmd` | `02_make_media.bat` (`data\host\config.cmd`를 먼저 불러옴) |
+| `data\Media\pe\config.cmd` | USB / CD 미디어의 WinPE |
 
-### `bats\host\config.cmd` (클라이언트 PC와 빌드 PC)
+### `data\host\config.cmd` (클라이언트 PC와 빌드 PC)
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
@@ -943,7 +1068,7 @@ Windows용 드라이버를 WinPE에 넣으면 다운로드 중 **연결이 끊�
 | `TORRENT` | `%WORK_DIR%\DVT_backup.torrent` | 이미지에 넣을 토렌트 |
 | `NETDRV_EXCLUDE` | `Realtek` | 정규식. 일치하는 네트워크 드라이버는 추출하지 않음. 비우면 모두 추출. Realtek은 WinPE용 드라이버를 `drivers\`에 넣어 사용([Realtek 랜카드](#realtek-랜카드) 참고) |
 | `BOOT_MOUNT_DIR` | `%SystemDrive%\DVT_BootMount` | 로컬 마운트 폴더 |
-| `DISK_ID_NAME` | `target_disk.txt` | 디스크 ID를 담아 이미지에 넣는 파일 (`bats\pe\config.cmd`의 `DISK_ID_FILE`과 같아야 함) |
+| `DISK_ID_NAME` | `target_disk.txt` | 디스크 ID를 담아 이미지에 넣는 파일 (`data\pe\config.cmd`의 `DISK_ID_FILE`과 같아야 함) |
 | `BITLOCKER_SUSPEND` | `1` | `1` = Windows 드라이브의 BitLocker를 재시작 1회 동안 일시 중단, `0` = 그대로 둠 |
 | `BOOT_ENTRY_NAME` | `DVT WinPE` | 부팅 메뉴 항목 이름 |
 | `BCD_CLEANUP_MODE` | `2` | 부팅 항목 삭제 방식: `1` WinPE에서, `2` 다음 Windows 부팅 시(예약 작업), `0` 삭제 안 함 |
@@ -951,9 +1076,9 @@ Windows용 드라이버를 WinPE에 넣으면 다운로드 중 **연결이 끊�
 | `ADK_PE_DIR`, `PE_LANG` | ADK amd64, `en-us` | `winpe.wim` 원본 위치 |
 | `BUILD_LOCAL` | `%SystemDrive%\WinPE_LocalBuild` | 로컬 빌드 폴더 |
 | `PE_SCRATCH_MB` | `512` | WinPE 스크래치 공간 |
-| `PE_COMMON_DIR` | `bats\common` | 모든 이미지에 복사하는 공용 WinPE 스크립트 |
+| `PE_COMMON_DIR` | `data\common` | 모든 이미지에 복사하는 공용 WinPE 스크립트 |
 
-### `bats\pe\config.cmd` (WinPE, 클라이언트 로컬부팅)
+### `data\pe\config.cmd` (WinPE, 클라이언트 로컬부팅)
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
@@ -981,7 +1106,7 @@ Windows용 드라이버를 WinPE에 넣으면 다운로드 중 **연결이 끊�
 | `BCD_LOCALE` | `ko-kr` | `bcdboot`에 전달할 로캘 |
 | `FAIL_REBOOT_SEC`, `DONE_REBOOT_SEC` | `10`, `5` | 재부팅 대기 시간 |
 
-### `bats\Media\config.cmd` (02_make_media.bat)
+### `data\Media\config.cmd` (02_make_media.bat)
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
@@ -990,10 +1115,10 @@ Windows용 드라이버를 WinPE에 넣으면 다운로드 중 **연결이 끊�
 | `USB_PART_MB` | *(비어 있음)* | USB 파티션 크기(MB). 비우면 디스크 전체 |
 | `MEDIA_OUT_DIR` | 빌드 폴더의 `_output\media` | 결과 폴더 (`boot.wim`, `DVT_media.iso`) |
 
-### `bats\Media\pe\config.cmd` (WinPE, USB / CD 미디어)
+### `data\Media\pe\config.cmd` (WinPE, USB / CD 미디어)
 
 `AUTO_DISK_FALLBACK`, `DISK_ID_FILE`(작업자가 디스크를 고르므로)을 제외하면
-`bats\pe\config.cmd`와 같은 변수를 가지며, 다음 변수가 추가됩니다.
+`data\pe\config.cmd`와 같은 변수를 가지며, 다음 변수가 추가됩니다.
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
@@ -1024,14 +1149,14 @@ Windows용 드라이버를 WinPE에 넣으면 다운로드 중 **연결이 끊�
 
 ### aria2 프로필
 
-`bats\pe\aria2.conf.100`과 `bats\pe\aria2.conf.1G`(미디어는 `bats\Media\config\aria2.conf.*`)는
+`data\pe\aria2.conf.100`과 `data\pe\aria2.conf.1G`(미디어는 `data\Media\config\aria2.conf.*`)는
 일반 aria2 설정 파일입니다. 두 프로필 모두 다운로드 후 최대 60분간 시딩하고,
 DHT/PEX/LPD를 끄며, 다운로드가 끝나면 `start_restore.bat`을 실행합니다. 1 Gbps
 프로필은 더 많은 피어를 허용하고, 업로드 제한을 없애며, 디스크 캐시를 사용합니다.
 
 ## 버전
 
-DVT 버전은 `bats\common\version.cmd`(`DVT_VERSION`) 한 곳에서만 정합니다. 모든
+DVT 버전은 `data\common\version.cmd`(`DVT_VERSION`) 한 곳에서만 정합니다. 모든
 `config.cmd`가 이 파일을 불러오며, 빌드 스크립트, `make_boot.bat`, WinPE의 배너와 창
 제목, 테스트 보고서에 표시됩니다.
 
@@ -1043,7 +1168,7 @@ reg query HKLM\SOFTWARE\DVT
 
 | 값 | 예 |
 |---|---|
-| `Version` | `0.2.0` |
+| `Version` | `0.3.0` |
 | `BootMode` | `Local`(클라이언트 로컬부팅) 또는 `Media` |
 | `RestoredAt` | WinPE 기준 날짜와 시간 (`%DATE% %TIME%`) |
 | `Torrent` | `DVT_backup` |
@@ -1060,7 +1185,8 @@ reg query HKLM\SOFTWARE\DVT
 |---|---|
 | `01_make_pe.bat` | ADK `winpe.wim`으로 `_output\boot\boot.wim` 생성(스크립트, 도구, 드라이버, Num Lock 켜기) 후 host 스크립트를 `_output\boot\`에 복사 |
 | `03_make_test_pe.bat` | 테스트 이미지 `_output\boot_test\boot.wim` 생성(네트워크·게이트웨이·시더 점검, `<ip>.txt` FTP 업로드, 디스크 접근 없음) |
-| `02_make_media.bat` | ADK `winpe.wim`과 `bats\Media\pe`로 `_output\media\boot.wim`을 만든 뒤 ISO, 새 USB 드라이브, USB 드라이브 갱신 중 하나를 수행(`iso`, `usb`, `update`) |
+| `02_make_media.bat` | ADK `winpe.wim`과 `data\Media\pe`로 `_output\media\boot.wim`을 만든 뒤 ISO, 새 USB 드라이브, USB 드라이브 갱신 중 하나를 수행(`iso`, `usb`, `update`) |
+| `DVT_GUI.exe` | DVT GUI: 설정 편집, ADK와 WinPE 도구 설치, 위 세 스크립트 실행 |
 
 ### 클라이언트 PC (Windows, 클라이언트 로컬부팅)
 
@@ -1076,7 +1202,7 @@ reg query HKLM\SOFTWARE\DVT
 | `set_bcd.bat` | `boot.wim`용 램디스크 부팅 항목을 만들고 다음 부팅에만 사용 |
 | `show_ip.bat` | IP 주소의 마지막 자리를 큰 글씨로 표시 |
 
-### WinPE, 공용 (`bats\common\`)
+### WinPE, 공용 (`data\common\`)
 
 | 스크립트 | 역할 |
 |---|---|
@@ -1092,7 +1218,7 @@ reg query HKLM\SOFTWARE\DVT
 | `restore.bat` | 이미지·드라이버·부팅 파일 적용, `HKLM\SOFTWARE\DVT` 기록, `setpc.bat` 등록, 정리 후 재부팅 |
 | `ping_host.bat`, `wait.bat` | 보조 스크립트 (WinPE에는 `timeout.exe`가 없음) |
 
-### WinPE, 클라이언트 로컬부팅 전용 (`bats\pe\`)
+### WinPE, 클라이언트 로컬부팅 전용 (`data\pe\`)
 
 | 스크립트 | 역할 |
 |---|---|
@@ -1100,7 +1226,7 @@ reg query HKLM\SOFTWARE\DVT
 | `start_dvt.bat` | 주 흐름: 점검, 네트워크, 디스크 삭제, 다운로드 |
 | `get_disk.bat` | 지울 디스크 판별 (디스크 ID, 대체 규칙) |
 
-### WinPE, USB / CD 미디어 전용 (`bats\Media\pe\`)
+### WinPE, USB / CD 미디어 전용 (`data\Media\pe\`)
 
 | 스크립트 | 역할 |
 |---|---|
@@ -1120,7 +1246,7 @@ reg query HKLM\SOFTWARE\DVT
 | "Disk N is too small for this image" | 지우기 전 디스크 공간 점검이 실패했습니다. 더 큰 디스크를 쓰거나, 여유 공간이 있는 두 번째 디스크를 달거나, `APPLIED_SIZE_MB`(정확한 크기) 또는 `SPACE_CHECK`를 설정하세요. |
 | "Image N could not be read from backup.wim" | `backup.wim`에 `WIM_INDEX` 이미지가 없습니다. `wimlib-imagex info backup.wim`으로 목록을 확인하세요. |
 | `make_boot.bat`: "BitLocker could not be suspended" | 직접 일시 중단(`manage-bde -protectors -disable C: -RebootCount 1`)하거나 `BITLOCKER_SUSPEND=0`으로 설정하세요. |
-| 빌드: "... is in bats\common and in ..." | 이전 버전에서 남은 스크립트입니다. `bats\pe`나 `bats\Media\pe`의 사본을 지우세요. |
+| 빌드: "... is in data\common and in ..." | 이전 버전에서 남은 스크립트입니다. `data\pe`나 `data\Media\pe`의 사본을 지우세요. |
 | "No seeder is reachable" | 트래커와 시더가 실행 중인지, 토렌트에 `dvt_check.txt`가 있는지 확인하세요. 로그: `%TEMP%\dvt_seeder.log` |
 | "The seeder check file in the torrent is empty" | 토렌트 안의 `dvt_check.txt`가 0바이트 파일입니다. 내용을 넣고 토렌트를 다시 만드세요. |
 | WinPE에서 네트워크가 안 됨 | 랜카드 드라이버가 없을 수 있습니다. `NETDRV_EXCLUDE`를 확인하거나, 드라이버를 `drivers\`에 넣고 다시 빌드하세요. Realtek은 WinPE용 드라이버가 필요합니다. |
