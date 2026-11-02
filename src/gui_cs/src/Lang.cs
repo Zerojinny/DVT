@@ -89,12 +89,10 @@ namespace Dvt
             codes.Add(c.ToLowerInvariant());
         }
 
-        // The language to use when none was chosen: Windows display language, else English
+        // The language to use when none was chosen: always English
+        // (the user picks another language at the bottom of the sidebar)
         public static string DefaultCode()
         {
-            string sys = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
-            foreach (KeyValuePair<string, string> kv in Available())
-                if (string.Equals(kv.Key, sys, StringComparison.OrdinalIgnoreCase)) return kv.Key;
             return "en";
         }
 

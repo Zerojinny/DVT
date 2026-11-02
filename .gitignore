@@ -20,3 +20,22 @@
 # third-party tools (downloaded by the GUI, not part of DVT)
 **/pe_tools/
 **/system32/
+
+# portable qBittorrent of the seeder (installed by the GUI)
+**/qbittorrent/
+
+# DVT GUI build result (attach it to the GitHub release instead)
+**/DVT_GUI.exe
+
+# language files next to DVT_GUI.exe (copy of src/gui_cs/lang)
+/lang/
+/src/lang/
+
+# drivers of the build PC (third-party, put in by the user)
+/drivers/
+/src/drivers/
+
+# local tools of the developer PC (Claude Code, Trail-code)
+.claude/
+.trail/
+/graft/

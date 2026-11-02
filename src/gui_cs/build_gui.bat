@@ -7,7 +7,7 @@ rem  that comes with the .NET Framework 4.x of Windows 10/11
 rem  (no Visual Studio, no SDK, no download).
 rem  The icon (DVT.ico), the manifest (app.manifest), the language
 rem  files (lang\*.ini), adk.ini (<build>\data\adk.ini, else
-rem  gui_cs\adk.ini) and tools.ini (page Prerequisites) are embedded;
+rem  gui_cs\adk.ini), tools.ini and qbt.ini (page Prerequisites) are embedded;
 rem  the version information comes from src\AssemblyInfo.cs.
 rem  DVT_GUI.exe also reads lang\*.ini, data\adk.ini and tools.ini at
 rem  start, so edited copies work without a rebuild.
@@ -76,6 +76,13 @@ if not exist "%~dp0tools.ini" (
     goto :failed
 )
 set OPT_RES=%OPT_RES% /resource:"%~dp0tools.ini",Dvt.data.tools.ini
+
+rem ---- data of the qBittorrent tab, embedded as Dvt.data.qbt.ini ----
+rem <build>\data\qbt.ini first, else gui_cs\qbt.ini (optional)
+set "QBT_INI=%BUILD_DIR%\data\qbt.ini"
+if not exist "%QBT_INI%" set "QBT_INI=%~dp0qbt.ini"
+if exist "%QBT_INI%" set OPT_RES=%OPT_RES% /resource:"%QBT_INI%",Dvt.data.qbt.ini
+if not exist "%QBT_INI%" echo [WARN] qbt.ini not found: the qBittorrent tab needs data\qbt.ini at run time.
 
 echo ==============================================
 echo  DVT GUI - build DVT_GUI.exe

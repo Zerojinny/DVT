@@ -297,6 +297,7 @@ dvt/
 ├─ pe_tools/                aria2c.exe, wimlib-imagex.exe, DLLs, nircmd.exe -> X:\restore
 ├─ system32/                optional files -> X:\Windows\System32
 ├─ drivers/                 optional drivers added to every WinPE image
+├─ qbittorrent/             portable qBittorrent for the seeder (DVT GUI)
 │
 │  ── created by the build scripts ──
 ├─ source/                  stored copies of ADK files (first run only)
@@ -331,11 +332,12 @@ every step can also be done without it — run the batch file and edit the
 
 ### Pages
 
-The sidebar on the left switches between four pages. Each page has its own
+The sidebar on the left switches between five pages. Each page has its own
 color; a dot in the sidebar and `●` on a tab mark unsaved changes.
 
 | Page | Starts | Settings edited |
 |---|---|---|
+| **qBittorrent (seeder)** | qBittorrent download, image folder check, disk size | `qbittorrent\profile\qBittorrent\config\qBittorrent.ini`, `APPLIED_SIZE_MB` |
 | **Client local boot** | `data\01_make_pe.bat` | `data\host\config.cmd`, `data\pe\config.cmd`, aria2 profiles |
 | **USB / CD media** | `data\02_make_media.bat iso` / `usb` / `update` | `data\Media\pe\config.cmd`, `ip.txt`, torrent, aria2 profiles, `data\Media\config.cmd` |
 | **Test boot** | `data\03_make_test_pe.bat` | `data\test\test_config.cmd` |
@@ -373,6 +375,79 @@ color; a dot in the sidebar and `●` on a tab mark unsaved changes.
   **Build test image**. The network and seeder checks use the settings of
   `data\pe\config.cmd` (page *Client local boot*).
 
+### qBittorrent (seeder)
+
+![qBittorrent (seeder) page](images/gui_qbittorrent.en.png)
+
+The **qBittorrent (seeder)** page (at the top of the sidebar) prepares the seeder PC (see
+[qBittorrent setup](#qbittorrent-setup-seeder-and-tracker)). Its buttons are in three rows:
+**qBittorrent** (install / update, start, open folder), **qBittorrent
+settings** (settings file for the link speed, update for this PC) and
+**Image folder** (check, disk size).
+
+- **Install / update qBittorrent:** finds the newest stable release
+  (`data\qbt.ini`), downloads the standard x64 build from SourceForge (the
+  download site of qbittorrent.org), unpacks the setup with 7-Zip into a
+  temporary folder and copies only the program files (`qbittorrent.exe`,
+  `qbittorrent.pdb`) to `qbittorrent\` of the build folder. Nothing is
+  installed in Windows and no administrator rights are needed. A `profile`
+  folder next to `qbittorrent.exe` makes it portable: the settings stay in
+  `qbittorrent\profile`. An installed 7-Zip is used; without it, `7z.exe` is
+  taken from 7-zip.org (GitHub) into `_output\qbt_download\7zip`. The setup
+  stays in `_output\qbt_download` with its SHA256 (`.sha256`, written after
+  the download); the same version is not downloaded again while the file
+  still matches it.
+- **Apply settings file:** copies the ready-made settings file for the link
+  speed of this PC (or the one chosen under *Settings for*) to
+  `qbittorrent\profile\qBittorrent\config\qBittorrent.ini`; the old file is
+  copied to `_output\gui_backup` first. Exit qBittorrent before. After a
+  first installation this is done automatically. The copied file gets the IP
+  address and the network adapter of this PC (the connected adapter with a
+  default gateway): **Network interface** (`Session\Interface`,
+  `Session\InterfaceName`), **Optional IP address to bind to**
+  (`Session\InterfaceAddress`) and the **Tracker URL** of the torrent creator
+  (`http://<IP>:9000/announce`).
+- **Update for this PC:** writes only these items into the existing
+  `qBittorrent.ini` (the other settings stay), e.g. after the seeder's IP or
+  adapter changed. The old file is copied to `_output\gui_backup` first.
+- **Add firewall rules:** adds inbound Windows Firewall rules (all profiles)
+  for the peer port (TCP and UDP, `Session\Port`), the tracker port (TCP,
+  `Advanced\trackerPort`) — read from `qBittorrent.ini` — and for
+  `qbittorrent.exe`, after one administrator prompt. Rules of the same names
+  (`DVT qBittorrent ...`) are replaced, so press it again after a port
+  change. The status line *Windows Firewall* shows whether the rules exist.
+  **Install / update qBittorrent** adds the rules by itself at the end
+  (administrator prompt; only a failure is shown).
+- **Check image folder:** choose the folder that becomes the torrent (see
+  [Preparing the torrent](#preparing-the-torrent)) and check it before the
+  torrent is created. Required: the folder name is `DL_NAME` (`DVT_backup`),
+  `backup.wim` (`WIM_NAME`) exists and is a WIM file, and `dvt_check.txt`
+  (`CHECK_FILE`) exists and is not empty. A missing `dvt_check.txt` is created
+  (about 4 KB of text); for an empty one the GUI asks before writing it.
+  `drivers\` and `files\setpc.bat` are listed when present (optional). The
+  names are read from `data\pe\config.cmd`. After a file was created, create
+  the torrent (again) from this folder.
+- **Calculate disk size:** reads image `WIM_INDEX` of `backup.wim` with
+  `wimlib-imagex info` (from `PE_TOOLS_DIR`, see **WinPE tools** under [Prerequisites](#prerequisites)) and shows:
+  - the applied size, `APPLIED_SIZE_MB` = file data of the image with hard
+    links counted once (`Total Bytes` - `Hard Link Bytes`) + 4 KB per file and
+    folder (NTFS clusters and file records) + the other files of the folder
+    (`drivers\`, `files\`, ...);
+  - for a PC with **one disk** (download and restore on the same disk) and
+    for a PC with **two or more disks** (download on another disk): the
+    download and restore sizes in GB and the smallest disk that passes the
+    [disk space check](#disk-space-check) (system partitions, the larger of
+    UEFI and BIOS, and `SPACE_MARGIN_MB` included), as a common disk size.
+    Disks are sold in GB of 1,000,000,000 bytes and Windows counts 1 GB =
+    1,073,741,824 bytes, so a 128 GB disk shows as about 119 GB.
+
+  The details (wimlib values, sizes in MB) are written to the log of the tab.
+
+  After a question it writes `APPLIED_SIZE_MB` to `data\pe\config.cmd` and
+  `data\Media\pe\config.cmd` (backup in `_output\gui_backup`). The clients use
+  it after the WinPE or the media is built again; on a USB drive that is
+  already made, set it in the WinPE settings tab of USB / CD media.
+
 ### Prerequisites
 
 ![Prerequisites - Windows ADK](images/gui_adk.en.png)
@@ -400,16 +475,30 @@ the Windows ADK and the **Windows PE add-on** — and shows what is installed.
 **WinPE tools** downloads aria2, wimlib and NirCmd (x64) from their official
 sites, checks the SHA256 of each zip against the known hashes and copies the
 files to `pe_tools\` (`PE_TOOLS_DIR`). Replaced files are backed up to
-`_output\tools_backup\`.
+`_output\tools_backup\`. The zips stay in `_output\tools_download`; a zip
+whose SHA256 matches `data\tools.ini` is used again without a new download.
 
 ### Language
 
 All text of the GUI is in `lang\en.ini` and `lang\ko.ini`. Choose the
 language at the bottom of the sidebar (the choice is kept in
-`data\gui_settings.ini`). A language file is searched in
+`data\gui_settings.ini`; without it the GUI starts in English). A language file is searched in
 `lang\` next to `DVT_GUI.exe` first, then the copy built into the exe, so
 the text can be changed by editing the file. A new language is a copy of
 `en.ini` with the text translated; it appears in the list at the next start.
+
+### Start page
+
+**Start page** at the bottom of the sidebar chooses the page shown when the
+GUI starts: one of the five pages, or **Last page** (the page shown when the
+GUI was closed). Without a choice the GUI starts on *Client local boot*. The
+choice is kept in `data\gui_settings.ini`:
+
+```ini
+language   = en
+start_page = last     ; last | seeder | local | media | test | prereq
+last_page  = seeder   ; written when the GUI is closed
+```
 
 ### Without the GUI
 
@@ -422,6 +511,7 @@ the text can be changed by editing the file. A new language is a copy of
 | **Copy client package...** | Copy `_output\boot` (or `_output\boot_test`) by hand |
 | **Windows ADK** | Install the ADK (Deployment Tools) and the WinPE add-on from the [Microsoft page](https://learn.microsoft.com/windows-hardware/get-started/adk-install) |
 | **WinPE tools** | Download the tools and put the files in `pe_tools\` |
+| **qBittorrent (seeder)** | Install qBittorrent and copy the settings file by hand (see [Using the ready-made settings files](#using-the-ready-made-settings-files-qbittorrentini)) |
 
 The batch files ask for administrator rights themselves.
 
@@ -625,6 +715,8 @@ DVT_backup\
 
 - Create `dvt_check.txt` **before** creating the torrent. WinPE downloads only
   this file to prove that a seeder is reachable before it erases anything.
+  **Check image folder** on the qBittorrent (seeder) page of the GUI creates it
+  when it is missing and checks the required files.
 - Put the tracker URL in the torrent. Alternatively set
   `SEEDER_EXTRA_OPTS=--bt-tracker=http://...` in `data\pe\config.cmd` or
   `data\Media\pe\config.cmd` (this is used for the seeder check only; the main
@@ -702,6 +794,12 @@ Turn on the embedded tracker, lock the protocol to TCP, and create torrents in *
 netsh advfirewall firewall add rule name="DVT qBittorrent tracker" dir=in action=allow protocol=TCP localport=9000
 netsh advfirewall firewall add rule name="DVT qBittorrent peer" dir=in action=allow protocol=TCP localport=6881
 ```
+
+The **Add firewall rules** button of the GUI ([qBittorrent (seeder)](#qbittorrent-seeder))
+adds these rules (plus UDP for the peer port and a rule for `qbittorrent.exe`)
+with the ports of `qBittorrent.ini`. To remove them:
+`netsh advfirewall firewall delete rule name="DVT qBittorrent tracker"` (and the
+same for `DVT qBittorrent peer`, `DVT qBittorrent peer UDP`, `DVT qBittorrent program`).
 
 If you change either port, change `localport` to match. Add these port rules even if a program-level rule exists, because a network on the Public profile can still be blocked.
 
@@ -824,6 +922,10 @@ their defaults.
 | Installed version | `%userprofile%\AppData\Roaming\qBittorrent` |
 
 **How to apply**
+
+DVT GUI does steps 1–4 for its portable qBittorrent (page
+**qBittorrent (seeder)** → **Apply settings file**): it also sets the network
+interface, the IP to bind to and the tracker URL from this PC. By hand:
 
 1. **Exit qBittorrent completely**, including the tray icon. If the file is
    replaced while qBittorrent runs, qBittorrent overwrites it with the old
@@ -1204,8 +1306,11 @@ partitions and `SPACE_MARGIN_MB`) with what the restore needs:
 
 The applied size is `APPLIED_SIZE_MB` when set. Otherwise it is estimated as
 `APPLIED_SIZE_PCT` percent of the torrent size (default 200 %, a
-conservative value for a compressed WIM). For the exact value run
-`wimlib-imagex info backup.wim <index>` and divide `Total Bytes` by 1048576.
+conservative value for a compressed WIM). For the exact value use
+**Calculate disk size** on the qBittorrent (seeder) page of the GUI (see
+[qBittorrent (seeder)](#qbittorrent-seeder)), or run `wimlib-imagex info backup.wim <index>`
+and divide `Total Bytes` minus `Hard Link Bytes` by 1048576 (Windows images
+contain many hard links; `Total Bytes` counts each link again).
 If the torrent or disk size cannot be read, the check is skipped with a
 warning.
 
@@ -1231,7 +1336,7 @@ reg query HKLM\SOFTWARE\DVT
 
 | Value | Example |
 |---|---|
-| `Version` | `0.3.0` |
+| `Version` | `0.4.0` |
 | `BootMode` | `Local` (client local boot) or `Media` |
 | `RestoredAt` | date and time in WinPE (`%DATE% %TIME%`) |
 | `Torrent` | `DVT_backup` |

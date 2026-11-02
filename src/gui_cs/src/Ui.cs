@@ -14,6 +14,15 @@ namespace Dvt
     public static class Ui
     {
         public static MainForm Main;
+
+        // A path inside the build folder without the build folder itself
+        // (data\Media\config\...); other paths (USB drive) as they are
+        public static string ShortPath(string path)
+        {
+            if (Main == null || string.IsNullOrEmpty(path) || string.IsNullOrEmpty(Main.Root)) return path;
+            string root = Main.Root.TrimEnd('\\') + "\\";
+            return path.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? path.Substring(root.Length) : path;
+        }
         public static float Scale = 1f;
 
         // fonts of the current language (L.FontFamily), set by InitFonts

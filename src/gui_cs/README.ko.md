@@ -22,12 +22,13 @@
 콘솔 창에서 관리자 권한을 요청하고, 질문(재빌드 Y/N, USB 디스크 번호, `YES`,
 드라이브 문자)도 그 창에서 답합니다.
 
-왼쪽 사이드바로 세 페이지를 전환하며, 페이지마다 머리글·주 버튼·탭 색이
-다릅니다(파랑 / 청록 / 주황). 저장하지 않은 변경은 노란 점(사이드바)과
+왼쪽 사이드바로 다섯 페이지를 전환하며, 페이지마다 머리글·주 버튼·탭 색이
+다릅니다(진홍 / 파랑 / 청록 / 주황 / 보라). 저장하지 않은 변경은 노란 점(사이드바)과
 `●`(탭)로 표시됩니다.
 
 | 페이지 | 실행 | 편집하는 설정 |
 |---|---|---|
+| **qBittorrent (시더)** | — | `qbittorrent\profile\qBittorrent\config\qBittorrent.ini`, `APPLIED_SIZE_MB` |
 | **Client local boot** (클라이언트 로컬부팅) | `01_make_pe.bat` | `data\host\config.cmd`, `data\pe\config.cmd`, aria2 프로필(메모장) |
 | **USB / CD media** | `02_make_media.bat iso` / `usb` / `update` | `data\Media\pe\config.cmd`, `data\Media\config\ip.txt`, `DVT_backup.torrent`, aria2 프로필, `data\Media\config.cmd` |
 | **Test boot** | `03_make_test_pe.bat` | `data\test\test_config.cmd` |
@@ -39,9 +40,21 @@
   복사합니다.
 - 상태 표시줄에 스크립트 종료 시각과 결과가 표시됩니다.
 
+## qBittorrent (시더) 페이지
+
+사이드바의 첫 페이지는 최신 안정 버전의 qBittorrent(SourceForge의 표준 x64 빌드,
+`data\qbt.ini`)를 받아 7-Zip으로 임시 폴더에 풀고, 프로그램 파일만 `<빌드>\qbittorrent`에
+포터블 모드(`profile` 폴더)로 복사하고,
+PC의 링크 속도에 맞는 설정 파일(`doc\qbittorrent.ini\qbittorrent.ini.1G` 또는 `.100`)을
+`profile\qBittorrent\config\qBittorrent.ini`로 복사합니다.
+
+이미지 폴더(토렌트로 만들 폴더)는 **이미지 폴더 점검**으로 점검하고(`backup.wim`,
+`dvt_check.txt` 필수, `dvt_check.txt`가 없으면 만듦), **디스크 크기 계산**은 wimlib으로
+`backup.wim`을 읽어 `APPLIED_SIZE_MB`를 정하고 최소 디스크를 보여줍니다.
+
 ## 필수 구성 요소 페이지
 
-네 번째 페이지에는 **Windows ADK** 와 **WinPE 도구** 두 탭이 있습니다.
+마지막 페이지에는 **Windows ADK**, **WinPE 도구** 두 탭이 있습니다.
 
 ### WinPE 도구 (aria2, wimlib, NirCmd)
 
@@ -98,8 +111,9 @@ Windows ADK 탭은 빌드에 필요한 것만 Microsoft에서 설치합니다. W
 화면의 모든 문구(이름, 메시지, 모든 설정의 설명)는
 **`gui_cs\lang\<코드>.ini`** 에 있습니다: `en.ini`(영어), `ko.ini`(한국어).
 사이드바 아래에서 언어를 고르며, 선택은 `data\gui_settings.ini` 에
-저장됩니다. 선택한 적이 없으면 Windows 표시 언어의 파일이 있을 때 그 언어,
-없으면 영어를 씁니다.
+저장됩니다. 선택한 적이 없으면 영어로 시작합니다. 같은 파일에 시작 화면도
+저장됩니다(사이드바의 **시작 화면**: `start_page = last | seeder | local | media | test | prereq`,
+`last_page` = GUI를 닫을 때 보던 페이지).
 
 - `build_gui.bat` 이 이 파일들을 `DVT_GUI.exe` 에 넣으므로 exe만 있어도
   동작합니다. 언어 파일은 **`DVT_GUI.exe` 와 같은 폴더의 `lang\`**,
@@ -143,6 +157,7 @@ gui_cs\DVT.ico         아이콘
 data\adk.ini           ADK 릴리스: 다운로드 링크와 설치 파일 해시
                        (시작할 때 읽음, build_gui.bat이 exe에 넣음)
 gui_cs\tools.ini       aria2 / wimlib / NirCmd 다운로드 링크와 해시
+data\qbt.ini           qBittorrent 릴리스 목록, 다운로드 주소, 설정 파일
 gui_cs\lang\en.ini     영어 문구 (기준, 전체)
 gui_cs\lang\ko.ini     한국어 문구
 gui_cs\src\*.cs        소스 (C# 5, .NET Framework 4.x, WinForms)

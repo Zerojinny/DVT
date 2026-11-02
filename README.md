@@ -37,7 +37,8 @@ instead; the operator types the IP address and the disk at each PC.
 
 On the build PC, **DVT GUI** (`DVT_GUI.exe`) does everything in one window:
 edit every setting with its description, install the Windows ADK + WinPE
-add-on (choose the version), download aria2, wimlib and NirCmd, and build the
+add-on (choose the version), download aria2, wimlib and NirCmd, set up a
+portable qBittorrent for the seeder, and build the
 client local boot image, the USB / CD media and the test image. Build it once
 with `gui_cs\build_gui.bat` (uses the C# compiler of Windows, nothing to
 install). English and Korean; more languages are a text file in `lang\`.

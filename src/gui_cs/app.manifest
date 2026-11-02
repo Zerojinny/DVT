@@ -7,7 +7,7 @@
                 in the program).
 -->
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
-  <assemblyIdentity version="0.3.0.0" name="DVT.GUI" type="win32" processorArchitecture="*"/>
+  <assemblyIdentity version="0.4.0.0" name="DVT.GUI" type="win32" processorArchitecture="*"/>
   <description>DVT - Deploy Via Torrent GUI</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>

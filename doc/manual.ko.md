@@ -287,6 +287,7 @@ dvt/
 │  ── 저장소에 포함되지 않음, 직접 준비 ──
 ├─ pe_tools/                aria2c.exe, wimlib-imagex.exe, DLL, nircmd.exe -> X:\restore
 ├─ system32/                선택 사항, X:\Windows\System32로 복사
+├─ qbittorrent/             시더용 포터블 qBittorrent (DVT GUI)
 ├─ drivers/                 선택 사항, 모든 WinPE 이미지에 추가할 드라이버
 │
 │  ── 빌드 스크립트가 생성 ──
@@ -321,11 +322,12 @@ dvt/
 
 ### 페이지
 
-왼쪽 사이드바로 네 페이지를 전환합니다. 페이지마다 색이 다르며, 저장하지 않은
+왼쪽 사이드바로 다섯 페이지를 전환합니다. 페이지마다 색이 다르며, 저장하지 않은
 변경은 사이드바의 점과 탭의 `●`로 표시됩니다.
 
 | 페이지 | 실행 | 편집하는 설정 |
 |---|---|---|
+| **qBittorrent (시더)** | qBittorrent 다운로드, 이미지 폴더 점검, 디스크 크기 | `qbittorrent\profile\qBittorrent\config\qBittorrent.ini`, `APPLIED_SIZE_MB` |
 | **클라이언트 로컬부팅** | `data\01_make_pe.bat` | `data\host\config.cmd`, `data\pe\config.cmd`, aria2 프로필 |
 | **USB / CD 미디어** | `data\02_make_media.bat iso` / `usb` / `update` | `data\Media\pe\config.cmd`, `ip.txt`, 토렌트, aria2 프로필, `data\Media\config.cmd` |
 | **테스트 부팅** | `data\03_make_test_pe.bat` | `data\test\test_config.cmd` |
@@ -361,6 +363,61 @@ dvt/
   누릅니다. 네트워크·시더 점검 설정은 `data\pe\config.cmd`(*클라이언트 로컬부팅*
   페이지)를 따릅니다.
 
+### qBittorrent (시더)
+
+![qBittorrent (시더) 페이지](images/gui_qbittorrent.ko.png)
+
+사이드바 맨 위의 **qBittorrent (시더)** 페이지는 시더 PC를 준비합니다([qBittorrent 설정](#qbittorrent-설정-시더와-트래커) 참고).
+버튼은 세 줄로 나뉩니다: **qBittorrent**(설치 / 업데이트, 실행, 폴더 열기), **qBittorrent 설정**(링크
+속도에 맞는 설정 파일 적용, 이 PC 기준으로 수정), **이미지 폴더**(점검, 디스크 크기 계산).
+
+- **qBittorrent 설치 / 업데이트:** 최신 안정 버전을 찾아(`data\qbt.ini`) 표준 x64 빌드를
+  SourceForge(qbittorrent.org의 다운로드 사이트)에서 받고, 7-Zip으로 임시 폴더에 푼 뒤
+  프로그램 파일(`qbittorrent.exe`, `qbittorrent.pdb`)만 빌드 폴더의 `qbittorrent\`로
+  복사합니다. Windows에는 아무것도 설치하지 않으며 관리자 권한도 필요 없습니다.
+  `qbittorrent.exe` 옆에 `profile` 폴더를 만들어 포터블로 쓰므로 설정은
+  `qbittorrent\profile`에 저장됩니다. 설치된 7-Zip을 쓰고, 없으면 7-zip.org(GitHub)에서
+  `7z.exe`를 받아 `_output\qbt_download\7zip`에 둡니다. 설치 파일은 내려받은 뒤 기록한
+  SHA256(`.sha256`)과 함께 `_output\qbt_download`에 남고, 같은 버전은 파일이 그 해시와
+  일치하는 동안 다시 받지 않습니다.
+- **설정 파일 적용:** 이 PC의 링크 속도(또는 *적용할 설정*에서 고른 것)에 맞는 설정 파일을
+  `qbittorrent\profile\qBittorrent\config\qBittorrent.ini`로 복사합니다. 이전 파일은
+  `_output\gui_backup`에 먼저 백업합니다. qBittorrent를 먼저 종료하세요. 처음 설치할 때는
+  자동으로 적용됩니다. 복사한 파일에는 이 PC의 IP 주소와 네트워크 어댑터(기본 게이트웨이가 있는
+  연결된 어댑터)가 들어갑니다: **네트워크 인터페이스**(`Session\Interface`,
+  `Session\InterfaceName`), **바인딩할 IP 주소**(`Session\InterfaceAddress`),
+  토렌트 생성기의 **트래커 URL**(`http://<IP>:9000/announce`).
+- **이 PC 기준으로 수정:** 기존 `qBittorrent.ini`에서 위 항목만 바꾸고 다른 설정은 그대로 둡니다.
+  시더의 IP나 어댑터가 바뀌었을 때 씁니다. 이전 파일은 `_output\gui_backup`에 먼저 백업합니다.
+- **방화벽 예외 추가:** `qBittorrent.ini`에서 읽은 피어 포트(TCP와 UDP, `Session\Port`), 트래커
+  포트(TCP, `Advanced\trackerPort`)와 `qbittorrent.exe`에 대한 Windows 방화벽 인바운드 허용
+  규칙(모든 프로필)을 관리자 권한 한 번으로 추가합니다. 같은 이름(`DVT qBittorrent ...`)의 규칙은
+  새로 바꾸므로 포트를 바꾼 뒤에는 다시 누르세요. 상태 줄 *Windows 방화벽*에 규칙이 있는지
+  표시됩니다. **qBittorrent 설치 / 업데이트**는 마지막에 이 규칙을 자동으로 추가합니다(관리자
+  권한 확인, 실패했을 때만 알림).
+- **이미지 폴더 점검:** 토렌트로 만들 폴더([토렌트 준비](#토렌트-준비) 참고)를 골라 토렌트를
+  만들기 전에 점검합니다. 필수: 폴더 이름이 `DL_NAME`(`DVT_backup`)이고, `backup.wim`(`WIM_NAME`)이
+  있으며 WIM 파일이고, `dvt_check.txt`(`CHECK_FILE`)가 있고 비어 있지 않아야 합니다.
+  `dvt_check.txt`가 없으면 약 4 KB의 텍스트로 만들고, 비어 있으면 물어본 뒤 내용을 씁니다.
+  `drivers\`와 `files\setpc.bat`는 있으면 표시합니다(선택). 이름은 `data\pe\config.cmd`에서
+  읽습니다. 파일을 만들었다면 이 폴더로 토렌트를 (다시) 만드세요.
+- **디스크 크기 계산:** `wimlib-imagex info`(`PE_TOOLS_DIR`, [필수 구성 요소](#필수-구성-요소)의 **WinPE 도구** 참고)로
+  `backup.wim`의 `WIM_INDEX` 이미지를 읽어 다음을 보여줍니다.
+  - 복원 후 크기 `APPLIED_SIZE_MB` = 하드 링크를 한 번만 센 이미지의 파일 데이터
+    (`Total Bytes` - `Hard Link Bytes`) + 파일·폴더마다 4 KB(NTFS 클러스터와 파일 레코드)
+    + 폴더의 다른 파일(`drivers\`, `files\` ...)
+  - **디스크가 하나인 PC**(같은 디스크에 다운로드하고 복원)와 **디스크가 둘 이상인 PC**(다른
+    디스크에 다운로드) 각각의 다운로드·복원 크기(GB)와, [디스크 공간 점검](#디스크-공간-점검)을
+    통과하는 최소 디스크(시스템 파티션 중 UEFI·BIOS 중 큰 값과 `SPACE_MARGIN_MB` 포함)를 흔한
+    디스크 크기로 보여줍니다. 디스크는 1 GB = 1,000,000,000 바이트로 판매되고 Windows는
+    1 GB = 1,073,741,824 바이트로 계산하므로 128 GB 디스크는 약 119 GB로 표시됩니다.
+
+  자세한 값(wimlib 값, MB 단위 크기)은 탭의 로그에 남습니다.
+
+  확인을 받은 뒤 `APPLIED_SIZE_MB`를 `data\pe\config.cmd`와 `data\Media\pe\config.cmd`에
+  씁니다(백업: `_output\gui_backup`). 클라이언트는 WinPE나 미디어를 다시 빌드한 뒤 이 값을
+  씁니다. 이미 만든 USB 드라이브는 USB / CD 미디어의 WinPE 설정 탭에서 바꾸세요.
+
 ### 필수 구성 요소
 
 ![필수 구성 요소 - Windows ADK](images/gui_adk.ko.png)
@@ -385,14 +442,27 @@ dvt/
 
 **WinPE 도구** 탭은 aria2, wimlib, NirCmd(x64)를 공식 사이트에서 받아 zip의 SHA256을
 알려진 해시와 비교한 뒤 `pe_tools\`(`PE_TOOLS_DIR`)로 복사합니다. 바뀌는 파일은
-`_output\tools_backup\`에 먼저 백업합니다.
+`_output\tools_backup\`에 먼저 백업합니다. zip은 `_output\tools_download`에 남고,
+SHA256이 `data\tools.ini`와 일치하면 다시 받지 않고 그대로 씁니다.
 
 ### 언어
 
 GUI의 모든 문구는 `lang\en.ini`, `lang\ko.ini`에 있습니다. 언어는 사이드바 아래에서
-고르며, 선택은 `data\gui_settings.ini`에 저장됩니다. 언어 파일은 `DVT_GUI.exe` 옆의 `lang\`을 먼저 찾고, 없으면 exe에 내장된
+고르며, 선택은 `data\gui_settings.ini`에 저장됩니다(선택한 적이 없으면 영어로 시작). 언어 파일은 `DVT_GUI.exe` 옆의 `lang\`을 먼저 찾고, 없으면 exe에 내장된
 파일을 쓰므로 파일만 고치면 문구가 바뀝니다. 새 언어는 `en.ini`를 복사해 번역하면
 다음 실행 때 목록에 나타납니다.
+
+### 시작 화면
+
+사이드바 아래의 **시작 화면**에서 GUI를 시작할 때 보여줄 페이지를 고릅니다. 다섯 페이지
+중 하나나 **마지막 화면**(GUI를 닫을 때 보던 페이지)을 고를 수 있고, 고른 적이 없으면
+*클라이언트 로컬부팅*으로 시작합니다. 선택은 `data\gui_settings.ini`에 저장됩니다.
+
+```ini
+language   = ko
+start_page = last     ; last | seeder | local | media | test | prereq
+last_page  = seeder   ; GUI를 닫을 때 기록
+```
 
 ### GUI 없이 사용
 
@@ -405,6 +475,7 @@ GUI의 모든 문구는 `lang\en.ini`, `lang\ko.ini`에 있습니다. 언어는 
 | **클라이언트 패키지 복사...** | `_output\boot`(또는 `_output\boot_test`)를 직접 복사 |
 | **Windows ADK** | [Microsoft 페이지](https://learn.microsoft.com/windows-hardware/get-started/adk-install)에서 ADK(배포 도구)와 WinPE 추가 기능 설치 |
 | **WinPE 도구** | 도구를 받아 `pe_tools\`에 넣기 |
+| **qBittorrent (시더)** | qBittorrent를 설치하고 설정 파일을 직접 복사([미리 만든 설정 파일](#미리-만든-설정-파일qbittorrentini-사용하기) 참고) |
 
 배치 파일은 스스로 관리자 권한을 요청합니다.
 
@@ -595,7 +666,8 @@ DVT_backup\
 ```
 
 - `dvt_check.txt`는 토렌트를 만들기 **전에** 넣어야 합니다. WinPE는 무엇이든 지우기
-  전에 이 파일만 내려받아 시더에 연결되는지 확인합니다.
+  전에 이 파일만 내려받아 시더에 연결되는지 확인합니다. GUI의 qBittorrent (시더) 페이지에서
+  **이미지 폴더 점검**을 누르면 없을 때 만들어 주고 필수 파일을 점검합니다.
 - 토렌트에 트래커 URL을 넣습니다. 또는 `data\pe\config.cmd`나 `data\Media\pe\config.cmd`에서
   `SEEDER_EXTRA_OPTS=--bt-tracker=http://...`를 지정할 수 있습니다(이 값은 시더 점검에만
   쓰이며, 본 다운로드는 토렌트와 `aria2.conf`의 설정을 따릅니다).
@@ -670,6 +742,11 @@ DVT에서 qBittorrent는 배포 PC 한 대에서 **시더(원본 이미지 제�
 netsh advfirewall firewall add rule name="DVT qBittorrent tracker" dir=in action=allow protocol=TCP localport=9000
 netsh advfirewall firewall add rule name="DVT qBittorrent peer" dir=in action=allow protocol=TCP localport=6881
 ```
+
+GUI의 **방화벽 예외 추가** 버튼([qBittorrent (시더)](#qbittorrent-시더))은 `qBittorrent.ini`의 포트로
+이 규칙(피어 포트의 UDP와 `qbittorrent.exe` 규칙 포함)을 추가합니다. 지우려면
+`netsh advfirewall firewall delete rule name="DVT qBittorrent tracker"`처럼 실행합니다
+(`DVT qBittorrent peer`, `DVT qBittorrent peer UDP`, `DVT qBittorrent program`도 같은 방법).
 
 포트를 바꿨다면 두 명령의 `localport` 값도 함께 바꿉니다. 프로그램 단위 허용 규칙이 있더라도 네트워크 프로필이 Public이면 막힐 수 있어 포트 규칙을 따로 둡니다.
 
@@ -790,6 +867,10 @@ lt12 빌드(libtorrent 1.2)에서는 libtorrent 2.x 전용 항목(해싱 스레�
 | 설치 버전 | `%userprofile%\AppData\Roaming\qBittorrent` |
 
 **적용 방법**
+
+DVT GUI의 포터블 qBittorrent는 1~4단계를 GUI가 대신합니다(**qBittorrent (시더)**
+페이지 → **설정 파일 적용**). 네트워크 인터페이스, 바인딩할 IP, 트래커 URL도
+이 PC 기준으로 넣습니다. 직접 하려면:
 
 1. qBittorrent를 **완전히 종료**합니다. 트레이 아이콘도 종료해야 합니다. 실행 중에
    파일을 바꾸면 qBittorrent가 종료할 때 기존 설정으로 덮어씁니다.
@@ -1144,8 +1225,10 @@ GUI는 `set "NAME=VALUE"` 줄만 바꾸고 이전 파일을 `_output\gui_backup\
 
 적용된 이미지 크기는 `APPLIED_SIZE_MB`가 있으면 그 값을, 없으면 토렌트 크기의
 `APPLIED_SIZE_PCT` %(기본 200 %, 압축된 WIM 기준으로 넉넉한 값)로 추정합니다. 정확한
-값은 `wimlib-imagex info backup.wim <인덱스>`의 `Total Bytes`를 1048576으로 나누면
-됩니다. 토렌트나 디스크 크기를 읽지 못하면 경고만 표시하고 점검을 건너뜁니다.
+값은 GUI의 qBittorrent (시더) 페이지에서 **디스크 크기 계산**을 쓰거나,
+`wimlib-imagex info backup.wim <인덱스>`의 `Total Bytes`에서 `Hard Link Bytes`를 빼고
+1048576으로 나누면 됩니다(Windows 이미지에는 하드 링크가 많고, `Total Bytes`는 링크마다
+다시 셉니다). 토렌트나 디스크 크기를 읽지 못하면 경고만 표시하고 점검을 건너뜁니다.
 
 ### aria2 프로필
 
@@ -1168,7 +1251,7 @@ reg query HKLM\SOFTWARE\DVT
 
 | 값 | 예 |
 |---|---|
-| `Version` | `0.3.0` |
+| `Version` | `0.4.0` |
 | `BootMode` | `Local`(클라이언트 로컬부팅) 또는 `Media` |
 | `RestoredAt` | WinPE 기준 날짜와 시간 (`%DATE% %TIME%`) |
 | `Torrent` | `DVT_backup` |

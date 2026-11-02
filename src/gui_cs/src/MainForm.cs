@@ -42,7 +42,13 @@ namespace Dvt
         Control[] pages;
         AdkPage adkPage;
         ToolsPanel toolsPanel;
-        Control prereqPage;
+        QbtPanel qbtPanel;
+        Control prereqPage, seederPage;
+        // index of the client local boot page (the seeder page is above it)
+        const int PageLocal = 1;
+        // names of the pages in gui_settings.ini (start_page, last_page)
+        static readonly string[] PageKeys = { "seeder", "local", "media", "test", "prereq" };
+        int currentPage = -1;
         NavButton[] navButtons;
         AccentTabControl subLocal, subMedia;
         readonly Dictionary<string, TabPage> editorPages = new Dictionary<string, TabPage>();
@@ -89,8 +95,10 @@ namespace Dvt
             // after the editors: these read their paths
             adkPage = new AdkPage(GetPaths, Root);
             toolsPanel = new ToolsPanel(GetPaths, Root);
+            qbtPanel = new QbtPanel(Root, GetPaths, SetPeValue);
+            seederPage = BuildSeederPage();
             prereqPage = BuildPrereqPage();
-            pages = new Control[] { pLocal, pMedia, pTest, prereqPage };
+            pages = new Control[] { seederPage, pLocal, pMedia, pTest, prereqPage };
             foreach (Control p in pages)
             {
                 p.Dock = DockStyle.Fill;
@@ -103,7 +111,8 @@ namespace Dvt
             Controls.Add(content);
             Controls.Add(sidebar);
             Controls.Add(status);
-            ShowPage(0);
+            ShowPage(Program.RestartPage >= 0 ? Program.RestartPage : StartPageIndex());
+            Program.RestartPage = -1;
 
             UpdateMediaDriveList();
             SetMediaTarget(mediaDrive);
@@ -118,7 +127,8 @@ namespace Dvt
             {
                 if (!ConfirmUnsaved(AllItems(), L.T("action.closing"))) { e.Cancel = true; return; }
                 if (adkPage.Busy && !Ui.YesNo(L.T("adk.close_busy"), MessageBoxIcon.Warning)) { e.Cancel = true; return; }
-                if (toolsPanel.Busy && !Ui.YesNo(L.T("tools.close_busy"), MessageBoxIcon.Warning)) e.Cancel = true;
+                if (toolsPanel.Busy && !Ui.YesNo(L.T("tools.close_busy"), MessageBoxIcon.Warning)) { e.Cancel = true; return; }
+                if (qbtPanel.Busy && !Ui.YesNo(L.T("qbt.close_busy"), MessageBoxIcon.Warning)) e.Cancel = true;
             };
         }
 
@@ -173,8 +183,8 @@ namespace Dvt
             t.Dock = DockStyle.Fill;
             t.ColumnCount = 1;
             t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            t.RowCount = 7;
-            foreach (int h in new[] { 92, 68, 68, 68, 68, 0, 100 })
+            t.RowCount = 8;
+            foreach (int h in new[] { 92, 68, 68, 68, 68, 68, 0, 134 })
                 t.RowStyles.Add(h > 0 ? new RowStyle(SizeType.Absolute, Ui.S(h)) : new RowStyle(SizeType.Percent, 100f));
             t.Padding = new Padding(0);
 
@@ -198,11 +208,11 @@ namespace Dvt
             head.Controls.Add(tag);
             t.Controls.Add(head, 0, 0);
 
-            navButtons = new NavButton[4];
-            string[] titles = { L.T("nav.local"), L.T("nav.media"), L.T("nav.test"), L.T("nav.adk") };
-            string[] subs = { "01_make_pe.bat", "02_make_media.bat", "03_make_test_pe.bat", L.T("nav.adk_sub") };
-            Color[] colors = { Palette.Local, Palette.Media, Palette.Test, Palette.Adk };
-            for (int n = 0; n < 4; n++)
+            navButtons = new NavButton[5];
+            string[] titles = { L.T("nav.qbt"), L.T("nav.local"), L.T("nav.media"), L.T("nav.test"), L.T("nav.adk") };
+            string[] subs = { L.T("nav.qbt_sub"), "01_make_pe.bat", "02_make_media.bat", "03_make_test_pe.bat", L.T("nav.adk_sub") };
+            Color[] colors = { Palette.Seeder, Palette.Local, Palette.Media, Palette.Test, Palette.Adk };
+            for (int n = 0; n < navButtons.Length; n++)
             {
                 NavButton b = new NavButton();
                 b.Title = titles[n];
@@ -219,7 +229,8 @@ namespace Dvt
             TableLayoutPanel foot = new TableLayoutPanel();
             foot.Dock = DockStyle.Fill;
             foot.ColumnCount = 1;
-            foot.RowCount = 2;
+            foot.RowCount = 3;
+            foot.RowStyles.Add(new RowStyle(SizeType.Absolute, Ui.S(34)));
             foot.RowStyles.Add(new RowStyle(SizeType.Absolute, Ui.S(34)));
             foot.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
             foot.Padding = new Padding(Ui.S(14), 0, Ui.S(10), Ui.S(4));
@@ -227,7 +238,7 @@ namespace Dvt
             Label lblLang = new Label();
             lblLang.Text = L.T("sidebar.language");
             lblLang.ForeColor = Palette.SidebarText;
-            lblLang.AutoSize = true;
+            SizeSidebarLabel(lblLang);
             lblLang.Margin = new Padding(0, Ui.S(7), Ui.S(6), 0);
             langCombo = new ComboBox();
             langCombo.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -244,15 +255,31 @@ namespace Dvt
             langRow.Controls.Add(lblLang);
             langRow.Controls.Add(langCombo);
             foot.Controls.Add(langRow, 0, 0);
+            foot.Controls.Add(BuildStartPageRow(), 0, 1);
             Label legend = new Label();
             legend.Text = L.T("sidebar.unsaved") + "\r\n" + L.T("sidebar.backups");
             legend.ForeColor = Palette.SidebarSub;
             legend.Dock = DockStyle.Fill;
-            foot.Controls.Add(legend, 0, 1);
-            t.Controls.Add(foot, 0, 6);
+            foot.Controls.Add(legend, 0, 2);
+            t.Controls.Add(foot, 0, 7);
 
             side.Controls.Add(t);
             return side;
+        }
+
+        // ============================================================
+        //  page 0: seeder (qBittorrent, image folder)
+        // ============================================================
+        Control BuildSeederPage()
+        {
+            TableLayoutPanel lay = Ui.NewRows(64, 0);
+            lay.Controls.Add(new HeaderBanner(L.T("nav.qbt"), L.T("qbt.subtitle"), Palette.Seeder), 0, 0);
+            Panel body = new Panel();
+            body.Dock = DockStyle.Fill;
+            body.Padding = new Padding(Ui.S(4), Ui.S(8), Ui.S(4), 0);
+            body.Controls.Add(qbtPanel);
+            lay.Controls.Add(body, 0, 1);
+            return lay;
         }
 
         // ============================================================
@@ -282,12 +309,74 @@ namespace Dvt
                 return;
             }
             Program.SaveLanguage(Root, code);
+            Program.RestartPage = currentPage;
             RestartRequested = true;
             Close();
         }
 
+        // ---- start page (gui_settings.ini: start_page, last_page) ----
+
+        int PageIndex(string key)
+        {
+            for (int n = 0; n < PageKeys.Length; n++)
+                if (PageKeys[n].Equals(key, StringComparison.OrdinalIgnoreCase)) return n;
+            return -1;
+        }
+
+        int StartPageIndex()
+        {
+            string start = Program.GetSetting(Root, "start_page", "local");
+            if (start.Equals("last", StringComparison.OrdinalIgnoreCase))
+                start = Program.GetSetting(Root, "last_page", "local");
+            int i = PageIndex(start);
+            return i >= 0 ? i : PageLocal;
+        }
+
+        // the labels of the sidebar rows (Language, Start page) get the same
+        // width, so the two drop-down lists line up in every language
+        static void SizeSidebarLabel(Label l)
+        {
+            int w = 0;
+            foreach (string k in new[] { "sidebar.language", "sidebar.start_page" })
+                w = Math.Max(w, TextRenderer.MeasureText(L.T(k), Ui.FontUI).Width);
+            l.AutoSize = false;
+            l.Width = w + Ui.S(2);
+            l.Height = Ui.S(20);
+        }
+
+        // sidebar row: "Start page" with "Last page shown" and the pages
+        Control BuildStartPageRow()
+        {
+            FlowLayoutPanel row = Ui.NewFlow();
+            Label lbl = new Label();
+            lbl.Text = L.T("sidebar.start_page");
+            lbl.ForeColor = Palette.SidebarText;
+            SizeSidebarLabel(lbl);
+            lbl.Margin = new Padding(0, Ui.S(7), Ui.S(6), 0);
+            ComboBox cbo = new ComboBox();
+            cbo.DropDownStyle = ComboBoxStyle.DropDownList;
+            cbo.Width = Ui.S(120);
+            cbo.DropDownWidth = Ui.S(220);
+            cbo.Margin = new Padding(0, Ui.S(3), 0, 0);
+            cbo.Items.Add(L.T("sidebar.start_last"));
+            foreach (NavButton b in navButtons) cbo.Items.Add(b.Title);
+            string start = Program.GetSetting(Root, "start_page", "local");
+            int sel = start.Equals("last", StringComparison.OrdinalIgnoreCase) ? 0 : PageIndex(start) + 1;
+            cbo.SelectedIndex = sel > 0 ? sel : (sel == 0 ? 0 : PageLocal + 1);
+            cbo.SelectedIndexChanged += delegate
+            {
+                string v = cbo.SelectedIndex == 0 ? "last" : PageKeys[cbo.SelectedIndex - 1];
+                Program.SetSetting(Root, "start_page", v, true);
+                SetStatus(L.F("status.start_page", cbo.SelectedItem));
+            };
+            row.Controls.Add(lbl);
+            row.Controls.Add(cbo);
+            return row;
+        }
+
         void ShowPage(int index)
         {
+            currentPage = index;
             for (int n = 0; n < pages.Length; n++)
             {
                 pages[n].Visible = (n == index);
@@ -298,6 +387,7 @@ namespace Dvt
                 if (!adkPage.Busy) adkPage.RefreshStatus();
                 if (!toolsPanel.Busy) toolsPanel.RefreshStatus();
             }
+            if (pages[index] == seederPage && !qbtPanel.Busy) qbtPanel.RefreshStatus();
         }
 
         void UpdateUnsavedMarks()
@@ -309,9 +399,9 @@ namespace Dvt
                 if (tc != null) tc.SetUnsaved(kv.Value, editors[kv.Key].Dirty);
             }
             if (ipPage != null) subMedia.SetUnsaved(ipPage, ipPanel.Dirty);
-            navButtons[0].Unsaved = editors["host"].Dirty || editors["pe"].Dirty;
-            navButtons[1].Unsaved = editors["mediape"].Dirty || editors["media"].Dirty || ipPanel.Dirty;
-            navButtons[2].Unsaved = editors["test"].Dirty;
+            navButtons[PageLocal].Unsaved = editors["host"].Dirty || editors["pe"].Dirty;
+            navButtons[PageLocal + 1].Unsaved = editors["mediape"].Dirty || editors["media"].Dirty || ipPanel.Dirty;
+            navButtons[PageLocal + 2].Unsaved = editors["test"].Dirty;
         }
 
         // ============================================================
@@ -621,6 +711,31 @@ namespace Dvt
             return p;
         }
 
+        // Writes set "NAME=value" into the WinPE settings of the client local
+        // boot (data\pe) and of the USB / CD media (data\Media\pe), after a
+        // backup to _output\gui_backup. An open editor of the file without
+        // unsaved changes is loaded again. Returns the files that changed.
+        List<string> SetPeValue(string name, string value)
+        {
+            List<string> written = new List<string>();
+            foreach (string f in new[] { Path.Combine(DataDir, @"pe\config.cmd"), Path.Combine(DataDir, @"Media\pe\config.cmd") })
+            {
+                if (!File.Exists(f)) continue;
+                DvtConfig c = DvtConfig.Read(f);
+                ConfigEntry e = c.Find(name);
+                if (e == null || e.ReadOnly) continue;
+                e.Value = value;
+                if (!e.Changed) continue;
+                c.Save(BackupDir);
+                written.Add(f);
+                foreach (ConfigEditor ed in editors.Values)
+                    if (!ed.Dirty && !string.IsNullOrEmpty(ed.FilePath)
+                        && string.Equals(Path.GetFullPath(ed.FilePath), Path.GetFullPath(f), StringComparison.OrdinalIgnoreCase))
+                        ed.LoadFile();
+            }
+            return written;
+        }
+
         static string ResolveOr(string text, Dictionary<string, string> map, string fallback)
         {
             string r = DvtUtil.Resolve(text, map);
@@ -808,6 +923,8 @@ namespace Dvt
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             timer.Stop();
+            if (currentPage >= 0 && currentPage < PageKeys.Length)
+                Program.SetSetting(Root, "last_page", PageKeys[currentPage], false);
             base.OnFormClosed(e);
         }
     }

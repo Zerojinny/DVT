@@ -177,6 +177,20 @@ namespace Dvt
             return null;
         }
 
+        // null = valid Authenticode signature (any publisher), else the reason;
+        // signer = subject of the signing certificate
+        public static string CheckSignature(string path, out string signer)
+        {
+            signer = null;
+            int rc;
+            try { rc = VerifyEmbeddedSignature(path); }
+            catch (Exception ex) { return "WinVerifyTrust: " + ex.Message; }
+            if (rc != 0) return string.Format("WinVerifyTrust 0x{0:X8}", rc);
+            try { signer = X509Certificate.CreateFromSignedFile(path).Subject; }
+            catch (Exception ex) { return "Certificate: " + ex.Message; }
+            return null;
+        }
+
         // null = valid Authenticode signature of Microsoft Corporation, else the reason
         public static string CheckMicrosoftSignature(string path)
         {

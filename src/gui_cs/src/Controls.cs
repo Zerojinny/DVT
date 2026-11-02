@@ -22,6 +22,7 @@ namespace Dvt
         public static readonly Color Media = Color.FromArgb(0, 122, 100);    // teal
         public static readonly Color Test = Color.FromArgb(190, 92, 0);      // orange
         public static readonly Color Adk = Color.FromArgb(104, 72, 160);     // purple
+        public static readonly Color Seeder = Color.FromArgb(176, 42, 92);   // crimson
         public static readonly Color TabIdle = Color.FromArgb(232, 235, 240);
         public static readonly Color TabIdleText = Color.FromArgb(60, 64, 72);
         public static readonly Color Unsaved = Color.FromArgb(255, 196, 0);

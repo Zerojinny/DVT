@@ -6,4 +6,4 @@ rem  the WinPE image (X:\restore) and next to the host scripts.
 rem  The version is shown on screen and written to the restored
 rem  Windows (HKLM\SOFTWARE\DVT, value Version).
 rem ============================================================
-set "DVT_VERSION=0.3.0"
+set "DVT_VERSION=0.4.0"

@@ -23,12 +23,14 @@ Double-click `DVT_GUI.exe` (no administrator rights needed). Each build script
 asks for elevation in its own console window, and its questions (rebuild Y/N,
 USB disk number, `YES`, drive letter) are answered there.
 
-The left sidebar switches between the three pages; each page has its own
-color (blue / teal / orange) for its header, main button and tabs. A yellow
+The left sidebar switches between five pages; each page has its own
+color (crimson / blue / teal / orange / purple) for its header, main button
+and tabs. A yellow
 dot (sidebar) or `●` (tab) marks unsaved changes.
 
 | Page | Runs | Settings edited |
 |---|---|---|
+| **qBittorrent (seeder)** | — | `qbittorrent\profile\qBittorrent\config\qBittorrent.ini`, `APPLIED_SIZE_MB` |
 | **Client local boot** | `01_make_pe.bat` | `data\host\config.cmd`, `data\pe\config.cmd`, aria2 profiles (Notepad) |
 | **USB / CD media** | `02_make_media.bat iso` / `usb` / `update` | `data\Media\pe\config.cmd`, `data\Media\config\ip.txt`, `DVT_backup.torrent`, aria2 profiles, `data\Media\config.cmd` |
 | **Test boot** | `03_make_test_pe.bat` | `data\test\test_config.cmd` |
@@ -39,9 +41,24 @@ dot (sidebar) or `●` (tab) marks unsaved changes.
 - **Copy client package…** copies `_output\boot` (or `boot_test`) to a folder.
 - The status bar shows when a script finished and its result.
 
+## qBittorrent (seeder) page
+
+The first page of the sidebar downloads the newest stable
+qBittorrent (standard x64 build from SourceForge, `data\qbt.ini`), unpacks the
+setup with 7-Zip into a temporary folder, copies only the program files to
+`<build>\qbittorrent` (portable mode, `profile` folder) and copies the
+ready-made settings file for the link speed of the PC
+(`doc\qbittorrent.ini\qbittorrent.ini.1G` or `.100`) to
+`profile\qBittorrent\config\qBittorrent.ini`.
+
+The image folder (the folder that becomes the torrent) is checked with
+**Check image folder** (`backup.wim` and `dvt_check.txt` required,
+`dvt_check.txt` created when missing); **Calculate disk size** reads
+`backup.wim` with wimlib, sets `APPLIED_SIZE_MB` and shows the smallest disk.
+
 ## Prerequisites page
 
-The fourth page has two tabs: **Windows ADK** and **WinPE tools**.
+The last page has two tabs: **Windows ADK** and **WinPE tools**.
 
 ### WinPE tools (aria2, wimlib, NirCmd)
 
@@ -103,8 +120,10 @@ The download method and the hashes come from
 All text on the screen (labels, messages and the descriptions of every
 setting) is in **`gui_cs\lang\<code>.ini`**: `en.ini` (English) and
 `ko.ini` (Korean). Choose the language at the bottom of the sidebar; the
-choice is kept in `data\gui_settings.ini`. Without a choice the Windows
-display language is used if a file for it exists, otherwise English.
+choice is kept in `data\gui_settings.ini`. Without a choice the GUI starts
+in English. The same file keeps the start page (**Start page** in the
+sidebar: `start_page = last | seeder | local | media | test | prereq`,
+`last_page` = the page shown when the GUI was closed).
 
 - The files are embedded in `DVT_GUI.exe` by `build_gui.bat`, so the exe also
   works alone. A language file is searched in this order: **`lang\` next to
@@ -151,6 +170,7 @@ gui_cs\DVT.ico         icon
 data\adk.ini           ADK releases: download links and setup hashes
                        (read at start; embedded by build_gui.bat)
 gui_cs\tools.ini       aria2 / wimlib / NirCmd download links and hashes
+data\qbt.ini           qBittorrent release list, download address, settings files
 gui_cs\lang\en.ini     English text (reference, complete)
 gui_cs\lang\ko.ini     Korean text
 gui_cs\src\*.cs        source (C# 5, .NET Framework 4.x, WinForms)

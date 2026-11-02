@@ -235,12 +235,12 @@ namespace Dvt
             if (File.Exists(t))
             {
                 FileInfo i = new FileInfo(t);
-                torrentLabel.Text = L.F("files.torrent_info", t, i.LastWriteTime.ToString("yyyy-MM-dd HH:mm"), i.Length);
+                torrentLabel.Text = L.F("files.torrent_info", Ui.ShortPath(t), i.LastWriteTime.ToString("yyyy-MM-dd HH:mm"), i.Length);
                 torrentLabel.ForeColor = SystemColors.ControlText;
             }
             else
             {
-                torrentLabel.Text = L.F("files.torrent_missing", t);
+                torrentLabel.Text = L.F("files.torrent_missing", Ui.ShortPath(t));
                 torrentLabel.ForeColor = Ui.ColorDanger;
             }
             SetFileLabel(conf1GLabel, Path.Combine(dir, "aria2.conf.1G"));
@@ -250,7 +250,7 @@ namespace Dvt
         static void SetFileLabel(Label l, string path)
         {
             bool ok = File.Exists(path);
-            l.Text = ok ? path : L.F("msg.not_found", path);
+            l.Text = ok ? Ui.ShortPath(path) : L.F("msg.not_found", Ui.ShortPath(path));
             l.ForeColor = ok ? SystemColors.ControlText : Ui.ColorDanger;
         }
     }

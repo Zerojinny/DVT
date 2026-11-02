@@ -36,7 +36,7 @@ Windows가 동작하지 않는 PC는 `02_make_media.bat`으로 만든 **USB / CD
 
 빌드 PC에서는 **DVT GUI**(`DVT_GUI.exe`) 창 하나로 모든 작업을 합니다. 모든 설정을
 설명과 함께 편집하고, Windows ADK와 WinPE 추가 기능을 버전을 골라 설치하고,
-aria2·wimlib·NirCmd를 내려받고, 클라이언트 로컬부팅 이미지·USB / CD 미디어·테스트
+aria2·wimlib·NirCmd를 내려받고, 시더용 포터블 qBittorrent를 준비하고, 클라이언트 로컬부팅 이미지·USB / CD 미디어·테스트
 이미지를 빌드합니다. `gui_cs\build_gui.bat`으로 한 번 빌드하면 됩니다(Windows에 있는
 C# 컴파일러 사용, 설치할 것 없음). 한국어와 영어를 지원하며, 다른 언어는 `lang\`의
 텍스트 파일 하나로 추가합니다.

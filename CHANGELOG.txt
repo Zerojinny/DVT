@@ -1,0 +1,150 @@
+DVT v0.4.0
+==========
+
+DVT GUI
+-------
+- New page qBittorrent (seeder), at the top of the sidebar: downloads the newest
+  stable qBittorrent (standard x64 build, SourceForge), unpacks the setup
+  with 7-Zip into a temporary folder and copies only the program files to
+  qbittorrent\ of the build folder (portable mode, qbittorrent\profile;
+  nothing is installed in Windows) and copies the ready-made settings file for the
+  link speed of this PC (qbittorrent.ini.1G or .100) to
+  profile\qBittorrent\config\qBittorrent.ini with the IP address and the
+  network adapter of this PC (network interface, IP to bind to, tracker URL).
+  Button "Update for this PC" sets these items again in the existing file.
+  Data: data\qbt.ini.
+- qBittorrent (seeder) page, button "Check image folder": checks the folder
+  that becomes the torrent (folder name DL_NAME; required files backup.wim
+  and dvt_check.txt; drivers\ and files\setpc.bat listed when present) and
+  creates dvt_check.txt (about 4 KB of text) when it is missing.
+- qBittorrent (seeder) page, button "Calculate disk size": reads backup.wim
+  with wimlib-imagex info (image WIM_INDEX), adds the other files of the
+  image folder, shows APPLIED_SIZE_MB and the smallest disk for a restore
+  (download on another drive / on the same disk) and writes APPLIED_SIZE_MB
+  to data\pe\config.cmd and data\Media\pe\config.cmd after a question.
+  The applied size counts hard links once (Total Bytes - Hard Link Bytes)
+  plus 4 KB per file and folder; the config.cmd comment is corrected.
+- The GUI starts in English until a language is chosen (before: the
+  Windows display language). The choice is kept in data\gui_settings.ini.
+- qBittorrent (seeder) page, button "Add firewall rules": adds inbound
+  Windows Firewall rules for the peer port (TCP and UDP), the tracker port
+  (TCP) of qBittorrent.ini and for qbittorrent.exe (one administrator
+  prompt; rules "DVT qBittorrent ..." are replaced). A status line shows
+  whether the rules exist. Install / update qBittorrent adds the rules by
+  itself at the end.
+- Downloads are kept and used again: a WinPE tools zip in
+  _output\tools_download whose SHA256 matches tools.ini, and a qBittorrent
+  setup in _output\qbt_download whose SHA256 matches the .sha256 file
+  written after its download, are not downloaded again.
+- Start page: chosen at the bottom of the sidebar (a page, or the last page
+  shown) and kept in data\gui_settings.ini (start_page, last_page). The
+  other lines of gui_settings.ini are kept when a setting is saved.
+- USB / CD media, tab "Torrent and aria2": files inside the build folder
+  are shown with a short path (data\Media\config\...) instead of the full
+  path of the PC.
+
+Repository
+----------
+- .gitignore: site-specific files (ip.txt, *.torrent, gui_settings.ini),
+  build results and third-party tools are never committed.
+
+DVT v0.3.0
+==========
+
+Highlights
+----------
+- DVT GUI (DVT_GUI.exe): one window for everything on the build PC. The
+  batch files still work on their own; the GUI only edits the settings
+  files and starts the scripts.
+  - Pages: Client local boot, USB / CD media, Test boot, Prerequisites.
+  - Every setting with a short description and full help; drop-down lists
+    for settings with fixed choices; rarely changed settings hidden until
+    "Show advanced" is checked.
+  - Saving changes only the set "NAME=VALUE" lines and keeps a backup in
+    _output\gui_backup.
+  - USB / CD media: edit ip.txt, the torrent and the WinPE settings of the
+    build folder or directly on an existing DVT USB drive.
+  - Copy client package: copies _output\boot (or boot_test) to a folder.
+  - English and Korean; the text is in lang\*.ini, a new language is a
+    translated copy of en.ini.
+- Windows ADK setup from the GUI: choose the ADK release (Windows 10 1809
+  to the newest), download adksetup.exe / adkwinpesetup.exe from Microsoft
+  (Microsoft signature and SHA256 checked, data\adk.ini) and install only
+  the Deployment Tools and the WinPE add-on. Offline package for a build PC
+  without internet. Another installed version is uninstalled first (ADK
+  setup error 2008).
+- WinPE tools download from the GUI: aria2, wimlib and NirCmd (x64) from
+  their official sites, SHA256 checked (data\tools.ini), copied to
+  pe_tools.
+
+Layout changes
+--------------
+- The bats folder is now data. 01_make_pe.bat, 02_make_media.bat and
+  03_make_test_pe.bat moved into data, together with adk.ini and tools.ini.
+  The build folder keeps DVT_GUI.exe, lang, doc, pe_tools, drivers, source
+  and _output.
+- BATS_DIR is now DATA_DIR (data\host\config.cmd).
+- nircmd.exe goes in pe_tools with the other tools (NIRCMD_SRC); the
+  nircmd-x64 folder is no longer used.
+
+Documentation
+-------------
+- README and manual: new DVT GUI chapter with screenshots (doc\images);
+  every step is explained with the GUI and without it (batch files).
+- Folder layout and paths updated for the data folder.
+
+Upgrading from v0.2.0
+---------------------
+- Copy the values you changed in bats\...\config.cmd, bats\test\
+  test_config.cmd and bats\Media\config (ip.txt, torrent, aria2 profiles)
+  to the same files under data\. Do not overwrite the new files with the
+  old ones.
+- Move nircmd.exe from nircmd-x64 to pe_tools (or use the WinPE tools tab).
+- Run the scripts from data\ (or use DVT_GUI.exe). Rebuild the images so
+  that they show the new version.
+
+DVT v0.2.0
+==========
+
+Highlights
+----------
+- Safer disk detection: the disk to erase is found by the disk ID of the
+  Windows disk (GPT GUID / MBR signature) instead of the DVT.tag marker
+  file. It also works on BitLocker drives. The RAW-volume search remains as
+  a fallback for PCs with instant recovery software (AUTO_DISK_FALLBACK).
+- BitLocker: make_boot.bat suspends the protection for one restart, so a PC
+  that returns to Windows after a failed check does not ask for the recovery
+  key (BITLOCKER_SUSPEND).
+- Disk space check: the restore stops before erasing anything if the image
+  does not fit (SPACE_CHECK).
+- Image index: choose the image inside backup.wim with WIM_INDEX (default
+  1).
+- Restore record: the version, boot mode, image and time are written to
+  HKLM\SOFTWARE\DVT in the restored Windows.
+- Faster startup: WinPE no longer waits for DHCP at startup. Static DNS
+  servers are passed from Windows, and the media's ip.txt accepts DNS lines.
+- USB / CD media: FORCE_DISK support. Asks whether to reuse the existing
+  media image. The FAT32 32 GB check was removed.
+- Version display: the DVT version is shown on every screen
+  (bats\common\version.cmd).
+
+Layout changes
+--------------
+- Scripts moved to bats\host, bats\pe, bats\Media and bats\test. The WinPE
+  scripts used by all three boot modes now live in bats\common.
+- ADK files go in source, and build results in _output (boot, boot_test,
+  media).
+- The test image runs from C:\temp\boot_test on the client.
+
+Documentation
+-------------
+- Added the README, the Markdown manual (English / Korean) and PDFs.
+- Added qBittorrent 5.3.0 seeder and tracker settings and ready-made
+  settings files (doc\qbittorrent.ini).
+
+Upgrading from v0.1
+-------------------
+- Do not overwrite the new config.cmd files with the old ones; copy over
+  only the values you changed.
+- Rebuild all three images and replace C:\temp\boot on the clients.
+- A leftover C:\DVT.tag is no longer used and can be deleted.

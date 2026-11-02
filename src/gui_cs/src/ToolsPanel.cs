@@ -9,7 +9,9 @@
 //  The download URLs and SHA256 hashes come from tools.ini. A zip
 //  whose hash differs is refused (or, for on_mismatch = ask, used only
 //  after the user agrees). Files that are replaced are copied to
-//  _output\tools_backup\<time>\ first.
+//  _output\tools_backup\<time>\ first. The zips stay in
+//  _output\tools_download and are used again (no download) while their
+//  SHA256 matches tools.ini.
 // ============================================================
 using System;
 using System.Collections.Generic;
@@ -268,9 +270,25 @@ namespace Dvt
                     try
                     {
                         string zip = Path.Combine(downloadDir, t.Key + "-" + t.Version + ".zip");
-                        worker.ReportProgress(-1, L.F("tools.log_download", t.Name, t.Url));
-                        Download(t, zip, n, list.Count);
-                        string hash = AdkCore.Sha256(zip);
+                        // a zip of the same version from an earlier download is used
+                        // again when its SHA256 matches tools.ini
+                        string hash = null;
+                        if (t.Sha256.Length > 0 && File.Exists(zip))
+                        {
+                            string old = AdkCore.Sha256(zip);
+                            if (string.Equals(old, t.Sha256, StringComparison.OrdinalIgnoreCase))
+                            {
+                                hash = old;
+                                worker.ReportProgress(-1, L.F("tools.log_reuse", t.Name, Path.GetFileName(zip)));
+                            }
+                            else worker.ReportProgress(-1, L.F("tools.log_reuse_bad", t.Name, Path.GetFileName(zip)));
+                        }
+                        if (hash == null)
+                        {
+                            worker.ReportProgress(-1, L.F("tools.log_download", t.Name, t.Url));
+                            Download(t, zip, n, list.Count);
+                            hash = AdkCore.Sha256(zip);
+                        }
                         if (!string.Equals(hash, t.Sha256, StringComparison.OrdinalIgnoreCase))
                         {
                             worker.ReportProgress(-1, L.F("tools.log_hash_mismatch", t.Name, hash, t.Sha256));

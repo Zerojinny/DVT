@@ -119,9 +119,11 @@ rem   2 = only warn
 rem   0 = no check
 set "SPACE_CHECK=1"
 rem Size of the applied image. Empty = estimated as APPLIED_SIZE_PCT
-rem percent of the download size. For the exact value, run
+rem percent of the download size. "Calculate disk size" on the
+rem qBittorrent (seeder) tab of DVT_GUI.exe sets it from
 rem   wimlib-imagex info backup.wim 1
-rem and use "Total Bytes" / 1048576 (MB).
+rem as ("Total Bytes" - "Hard Link Bytes") / 1048576, plus 4 KB per file
+rem and folder (NTFS) and the other files of the image folder (MB).
 set "APPLIED_SIZE_MB="
 set "APPLIED_SIZE_PCT=200"
 rem Space kept free on the Windows partition (MB)
